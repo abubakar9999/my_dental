@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/constants.dart';
 import '../../core/providers.dart';
 import '../../data/local/database.dart';
+import 'billing_pdf.dart';
 
 class PaymentFormScreen extends ConsumerStatefulWidget {
   final int patientId;
@@ -19,8 +21,11 @@ class PaymentFormScreen extends ConsumerStatefulWidget {
 class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
+  final _discountController = TextEditingController(text: '0');
+  final _notesController = TextEditingController();
 
   String _selectedMethod = AppConstants.paymentMethods.first;
+  String _selectedCategory = AppConstants.paymentCategories[1];
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
 
@@ -30,6 +35,8 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
   @override
   void dispose() {
     _amountController.dispose();
+    _discountController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -45,33 +52,88 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
     }
   }
 
-  Future<void> _savePayment() async {
+  void _applyPercentageDiscount(int percent, double currentDue) {
+    final base = currentDue > 0
+        ? currentDue
+        : (double.tryParse(_amountController.text.trim()) ?? 0.0);
+    if (base <= 0) return;
+
+    final disc = (base * percent / 100).roundToDouble();
+    setState(() {
+      _discountController.text = disc.toStringAsFixed(0);
+      if (currentDue > 0) {
+        final netPay = (currentDue - disc).clamp(0.0, double.infinity);
+        _amountController.text = netPay.toStringAsFixed(0);
+      }
+    });
+  }
+
+  Future<void> _savePayment({bool shareReceipt = false}) async {
     if (!_formKey.currentState!.validate()) return;
+
+    final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final discount = double.tryParse(_discountController.text.trim()) ?? 0.0;
+    if (amount + discount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('পেমেন্ট অথবা ডিসকাউন্টের পরিমাণ ০-এর বেশি হতে হবে'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
       final db = ref.read(databaseProvider);
+      final notes = _notesController.text.trim();
 
       await db.insertPayment(
         PaymentsCompanion.insert(
           patientId: widget.patientId,
           amount: amount,
+          discount: drift.Value(discount),
+          category: drift.Value(_selectedCategory),
+          notes: drift.Value(notes.isEmpty ? null : notes),
           date: _selectedDate,
           method: _selectedMethod,
         ),
       );
 
       ref.invalidate(totalPaidForPatientProvider(widget.patientId));
+      ref.invalidate(totalDiscountForPatientProvider(widget.patientId));
       ref.invalidate(totalDuesProvider);
       ref.invalidate(todayIncomeProvider);
       ref.invalidate(monthlyIncomeProvider);
 
+      if (shareReceipt && mounted) {
+        final patient = await db.getPatient(widget.patientId);
+        final treatments = await db.getTreatmentsForPatient(widget.patientId);
+        final invs =
+            await db.watchInvestigationsForPatient(widget.patientId).first;
+        final payments = await db.getPaymentsForPatient(widget.patientId);
+        final settings = ref.read(clinicSettingsProvider);
+        final doctor = ref.read(authRepositoryProvider).currentName;
+
+        await BillingPdfGenerator.shareInvoiceToWhatsApp(
+          patient: patient,
+          treatments: treatments,
+          investigations: invs,
+          payments: payments,
+          clinicName: settings.clinicName,
+          clinicPhone: settings.clinicPhone,
+          doctorName: doctor,
+          latestPaid: amount,
+          latestDiscount: discount,
+          latestMethod: _selectedMethod,
+        );
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('পেমেন্ট সফলভাবে গ্রহণ করা হয়েছে'),
+            content: Text('পেমেন্ট ও ডিসকাউন্ট সফলভাবে সংরক্ষিত হয়েছে'),
             backgroundColor: Colors.teal,
           ),
         );
@@ -97,10 +159,24 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
         ref.watch(totalCostForPatientProvider(widget.patientId));
     final totalPaidAsync =
         ref.watch(totalPaidForPatientProvider(widget.patientId));
+    final totalDiscountAsync =
+        ref.watch(totalDiscountForPatientProvider(widget.patientId));
+    final visitFee = ref.watch(clinicSettingsProvider).firstVisitFee;
+
+    final cost = totalCostAsync.valueOrNull ?? 0.0;
+    final paid = totalPaidAsync.valueOrNull ?? 0.0;
+    final prevDiscount = totalDiscountAsync.valueOrNull ?? 0.0;
+    final currentDue = (cost - (paid + prevDiscount)).clamp(0.0, double.infinity);
+
+    final enteredAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final enteredDiscount =
+        double.tryParse(_discountController.text.trim()) ?? 0.0;
+    final projectedDue =
+        (currentDue - (enteredAmount + enteredDiscount)).clamp(0.0, double.infinity);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('পেমেন্ট গ্রহণ'),
+        title: const Text('পেমেন্ট ও ডিসকাউন্ট'),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -118,60 +194,138 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Row(
+                  child: Column(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: Colors.teal.shade100,
-                        radius: 24,
-                        child: Icon(
-                          Icons.account_balance_wallet,
-                          color: Colors.teal.shade800,
-                        ),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: Colors.teal.shade100,
+                            radius: 24,
+                            child: Icon(
+                              Icons.account_balance_wallet,
+                              color: Colors.teal.shade800,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'বর্তমান বাকি (Current Due)',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '৳${_currencyFormat.format(currentDue)}',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: currentDue > 0
+                                        ? Colors.red
+                                        : Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'বর্তমান বাকি (Due)',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.black54,
-                              ),
+                      const Divider(height: 18),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'মোট বিল: ৳${_currencyFormat.format(cost)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          Text(
+                            'জমা: ৳${_currencyFormat.format(paid)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.green.shade800,
                             ),
-                            const SizedBox(height: 4),
-                            totalCostAsync.when(
-                              data: (cost) {
-                                return totalPaidAsync.when(
-                                  data: (paid) {
-                                    final due = cost - paid;
-                                    return Text(
-                                      '৳${_currencyFormat.format(due > 0 ? due : 0)}',
-                                      style: TextStyle(
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                        color: due > 0
-                                            ? Colors.red
-                                            : Colors.green,
-                                      ),
-                                    );
-                                  },
-                                  loading: () => const Text('লোড হচ্ছে...'),
-                                  error: (_, __) => const Text('৳0'),
-                                );
-                              },
-                              loading: () => const Text('লোড হচ্ছে...'),
-                              error: (_, __) => const Text('৳0'),
+                          ),
+                          Text(
+                            'ছাড়: ৳${_currencyFormat.format(prevDiscount)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange.shade900,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // Payment Category Chips
+              const Text(
+                'কালেকশনের ধরন (Category)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: AppConstants.paymentCategories.map((cat) {
+                  final selected = _selectedCategory == cat;
+                  return ChoiceChip(
+                    label: Text(cat, style: const TextStyle(fontSize: 12)),
+                    selected: selected,
+                    onSelected: (_) => setState(() {
+                      _selectedCategory = cat;
+                      if (cat.contains('ভিজিট') &&
+                          _amountController.text.trim().isEmpty) {
+                        _amountController.text = visitFee.toStringAsFixed(0);
+                      }
+                    }),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 14),
+
+              // Quick Amount Fill Chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (currentDue > 0)
+                    ActionChip(
+                      label: Text('পূর্ণ বাকি (৳${currentDue.toStringAsFixed(0)})'),
+                      backgroundColor: Colors.teal.shade50,
+                      onPressed: () {
+                        setState(() {
+                          final net = (currentDue - enteredDiscount)
+                              .clamp(0.0, double.infinity);
+                          _amountController.text = net.toStringAsFixed(0);
+                        });
+                      },
+                    ),
+                  ActionChip(
+                    label: Text('ভিজিট ৳${visitFee.toStringAsFixed(0)}'),
+                    onPressed: () => setState(
+                      () => _amountController.text = visitFee.toStringAsFixed(0),
+                    ),
+                  ),
+                  ActionChip(
+                    label: const Text('৳২,০০০'),
+                    onPressed: () =>
+                        setState(() => _amountController.text = '2000'),
+                  ),
+                  ActionChip(
+                    label: const Text('৳৫,০০০'),
+                    onPressed: () =>
+                        setState(() => _amountController.text = '5000'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
 
               // Payment Amount Field
               TextFormField(
@@ -179,23 +333,118 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   labelText: 'পরিশোধের পরিমাণ (৳) *',
-                  hintText: '500, 1000...',
+                  hintText: '0, 1000, 2000...',
                   prefixIcon: Icon(Icons.monetization_on_outlined),
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
-                    return 'টাকার পরিমাণ দিন';
+                    return 'টাকার পরিমাণ দিন (শুধু ছাড় হলে 0 লিখুন)';
                   }
                   final amount = double.tryParse(val.trim());
-                  if (amount == null || amount <= 0) {
-                    return 'সঠিক ধনাত্মক সংখ্যা দিন';
+                  if (amount == null || amount < 0) {
+                    return 'সঠিক সংখ্যা দিন';
                   }
                   return null;
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Discount Section
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50.withAlpha(110),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.discount_outlined,
+                            size: 18, color: Colors.deepOrange),
+                        SizedBox(width: 6),
+                        Text(
+                          'ডিসকাউন্ট / ছাড় (Discount Process)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepOrange,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      children: [5, 10, 15, 20].map((pct) {
+                        return ActionChip(
+                          label: Text('$pct% ছাড়',
+                              style: const TextStyle(fontSize: 11)),
+                          backgroundColor: Colors.white,
+                          onPressed: () =>
+                              _applyPercentageDiscount(pct, currentDue),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _discountController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: 'ডিসকাউন্ট পরিমাণ (৳)',
+                        filled: true,
+                        fillColor: Colors.white,
+                        isDense: true,
+                      ),
+                      validator: (val) {
+                        if (val != null && val.trim().isNotEmpty) {
+                          final d = double.tryParse(val.trim());
+                          if (d == null || d < 0) {
+                            return 'সঠিক ডিসকাউন্ট দিন';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Live Projection Box
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'মোট সমন্বয়: ৳${_currencyFormat.format(enteredAmount + enteredDiscount)}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    Text(
+                      'পরবর্তী বকেয়া: ৳${_currencyFormat.format(projectedDue)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: projectedDue > 0 ? Colors.red : Colors.teal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // Payment Method Dropdown
               DropdownButtonFormField<String>(
@@ -216,7 +465,7 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                   }
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // Date Picker
               InkWell(
@@ -239,23 +488,53 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
 
-              // Submit Button
+              // Notes Field
+              TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'মন্তব্য / কিস্তি নোট (ঐচ্ছিক)',
+                  hintText: 'উদাঃ ১ম ভিজিট + স্কেলিং ডিসকাউন্ট',
+                  prefixIcon: Icon(Icons.notes),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Submit + Share Receipt Buttons
               ElevatedButton.icon(
-                onPressed: _isLoading ? null : _savePayment,
+                onPressed:
+                    _isLoading ? null : () => _savePayment(shareReceipt: true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.share),
+                label: const Text(
+                  'জমা ও WhatsApp রিসিপ্ট PDF',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                onPressed:
+                    _isLoading ? null : () => _savePayment(shareReceipt: false),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.teal,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 icon: const Icon(Icons.receipt_long),
                 label: const Text(
-                  'পেমেন্ট জমা করুন',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  'শুধু পেমেন্ট জমা করুন',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

@@ -42,10 +42,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (success) {
         context.go('/');
       } else {
+        final extraError = ref.read(authRepositoryProvider).lastError;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'ভুল ফোন নম্বর/ইমেইল অথবা পাসওয়ার্ড। অনুগ্রহ করে আবার চেষ্টা করুন।',
+              extraError ??
+                  'ভুল ফোন নম্বর/ইমেইল অথবা পাসওয়ার্ড। অনুগ্রহ করে আবার চেষ্টা করুন।',
             ),
             backgroundColor: Colors.red,
           ),
@@ -78,23 +80,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             children: [
               // Logo / Icon
               Container(
-                width: 90,
-                height: 90,
+                width: 96,
+                height: 96,
                 decoration: BoxDecoration(
-                  color: Colors.teal,
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.teal.withAlpha(80),
+                      color: Colors.teal.withAlpha(70),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.medical_services,
-                  size: 45,
-                  color: Colors.white,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 96,
+                    height: 96,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Colors.teal,
+                      child: const Icon(
+                        Icons.medical_services,
+                        size: 48,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
                 ),
               ),
 

@@ -56,6 +56,10 @@ class Payments extends Table {
   IntColumn get treatmentId =>
       integer().nullable().references(Treatments, #id)();
   RealColumn get amount => real()();
+  RealColumn get discount => real().withDefault(const Constant(0.0))();
+  TextColumn get category =>
+      text().withDefault(const Constant('ট্রিটমেন্ট / বকেয়া'))();
+  TextColumn get notes => text().nullable()();
   DateTimeColumn get date => dateTime()();
   TextColumn get method => text()();
   DateTimeColumn get createdAt =>
@@ -67,7 +71,36 @@ class Prescriptions extends Table {
   IntColumn get patientId => integer().references(Patients, #id)();
   DateTimeColumn get date => dateTime()();
   TextColumn get medicines => text()(); // JSON string
+  TextColumn get investigations =>
+      text().withDefault(const Constant('[]'))(); // JSON string
   TextColumn get advice => text().nullable()();
+  DateTimeColumn get nextVisitDate => dateTime().nullable()();
+  TextColumn get doctorName => text().nullable()();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+}
+
+class Investigations extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get patientId => integer().references(Patients, #id)();
+  TextColumn get testName => text()();
+  TextColumn get toothNumber => text().nullable()();
+  TextColumn get status =>
+      text().withDefault(const Constant('pending'))(); // pending, completed
+  TextColumn get resultNotes => text().nullable()();
+  RealColumn get cost => real().withDefault(const Constant(0.0))();
+  DateTimeColumn get date => dateTime()();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+}
+
+class Expenses extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get title => text()();
+  TextColumn get category => text()();
+  RealColumn get amount => real()();
+  DateTimeColumn get date => dateTime()();
+  TextColumn get notes => text().nullable()();
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
 }

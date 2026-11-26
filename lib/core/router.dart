@@ -9,6 +9,8 @@ import '../features/patients/patient_form_screen.dart';
 import '../features/patients/patient_detail_screen.dart';
 import '../features/appointments/appointments_screen.dart';
 import '../features/appointments/appointment_form_screen.dart';
+import '../features/appointments/due_visits_screen.dart';
+import '../features/accounts/accounts_screen.dart';
 import '../features/treatments/treatment_form_screen.dart';
 import '../features/payments/payment_form_screen.dart';
 import '../features/prescriptions/prescription_form_screen.dart';
@@ -52,6 +54,13 @@ GoRouter createRouter(AuthRepository authRepo) {
             builder: (context, state) => const AppointmentsScreen(),
           ),
           GoRoute(
+            path: '/accounts',
+            builder: (context, state) {
+              final tab = int.tryParse(state.uri.queryParameters['tab'] ?? '0') ?? 0;
+              return AccountsScreen(initialTab: tab);
+            },
+          ),
+          GoRoute(
             path: '/settings',
             builder: (context, state) => const SettingsScreen(),
           ),
@@ -89,6 +98,11 @@ GoRouter createRouter(AuthRepository authRepo) {
                 patientId != null ? int.parse(patientId) : null,
           );
         },
+      ),
+      GoRoute(
+        path: '/appointments/due-visits',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const DueVisitsScreen(),
       ),
       GoRoute(
         path: '/patients/:id/treatments/add',

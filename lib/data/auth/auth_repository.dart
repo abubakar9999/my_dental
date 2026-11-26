@@ -61,6 +61,7 @@ class AuthRepository extends ChangeNotifier {
   final SharedPreferences? prefs;
 
   ClinicProfile? _currentProfile;
+  String? _lastError;
   final _authStateController = StreamController<bool>.broadcast();
 
   AuthRepository({
@@ -85,6 +86,7 @@ class AuthRepository extends ChangeNotifier {
 
   bool get isLoggedIn => _currentProfile != null;
   ClinicProfile? get currentProfile => _currentProfile;
+  String? get lastError => _lastError;
   String? get currentName => _currentProfile?.fullName;
   String? get currentRole => _currentProfile?.role;
   String? get currentEmail => _currentProfile?.email;
@@ -109,12 +111,28 @@ class AuthRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<String> _phoneVariants(String clean) {
+    final variants = <String>{clean};
+    if (clean.startsWith('01') && clean.length == 11) {
+      variants.add('88$clean');
+      variants.add('+88$clean');
+    } else if (clean.startsWith('8801') && clean.length == 13) {
+      variants.add('0${clean.substring(3)}');
+      variants.add('+$clean');
+    } else if (clean.startsWith('+8801') && clean.length == 14) {
+      variants.add(clean.substring(1));
+      variants.add('0${clean.substring(4)}');
+    }
+    return variants.toList();
+  }
+
   /// Signs in using either Phone number OR Email along with Password
   /// against the Supabase `profiles` table (with local SQLite offline fallback).
   Future<bool> signIn({
     required String identifier,
     required String password,
   }) async {
+    _lastError = null;
     final cleanId = identifier.trim();
     if (cleanId.isEmpty || password.isEmpty) return false;
 
@@ -130,10 +148,11 @@ class AuthRepository extends ChangeNotifier {
               .limit(1)
               .maybeSingle();
         } else {
+          final phones = _phoneVariants(cleanId);
           row = await supabase!
               .from('profiles')
               .select()
-              .eq('phone', cleanId)
+              .inFilter('phone', phones)
               .limit(1)
               .maybeSingle();
 
@@ -151,7 +170,6 @@ class AuthRepository extends ChangeNotifier {
           final storedPassword = row['password'] as String?;
 
           if (storedPassword == null) {
-            // `password` column missing in Supabase table -> fall through to local DB
             debugPrint('Supabase profiles table has no password column yet.');
           } else if (isActive && storedPassword == password) {
             final profile = ClinicProfile.fromJson(row);
@@ -180,6 +198,12 @@ class AuthRepository extends ChangeNotifier {
             return false;
           }
         }
+      } on PostgrestException catch (e) {
+        debugPrint('Supabase Postgrest error (${e.code}): ${e.message}');
+        if (e.code == '42501') {
+          _lastError =
+              'Supabase-এ profiles টেবিলের permission দেওয়া নেই (SQL Editor-এ GRANT রান করুন)।';
+        }
       } catch (e) {
         debugPrint('Supabase table login error (falling back to offline DB): $e');
       }
@@ -189,6 +213,7 @@ class AuthRepository extends ChangeNotifier {
     if (db != null) {
       final user = await db!.authenticateUser(cleanId, password);
       if (user != null) {
+        _lastError = null;
         await _setLoggedInProfile(ClinicProfile.fromLocalUser(user));
         return true;
       }

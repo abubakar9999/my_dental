@@ -209,10 +209,91 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  void _editClinicSettingsDialog(BuildContext context, WidgetRef ref) {
+    final settings = ref.read(clinicSettingsProvider);
+    final visitCtrl = TextEditingController(
+      text: settings.firstVisitFee.toStringAsFixed(0),
+    );
+    final followUpCtrl = TextEditingController(
+      text: settings.followUpFee.toStringAsFixed(0),
+    );
+    final nameCtrl = TextEditingController(text: settings.clinicName);
+    final phoneCtrl = TextEditingController(text: settings.clinicPhone);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ভিজিট ফি ও ক্লিনিক সেটিংস'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'ক্লিনিকের নাম',
+                  prefixIcon: Icon(Icons.local_hospital_outlined),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'ক্লিনিকের ফোন নম্বর',
+                  prefixIcon: Icon(Icons.phone),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: visitCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'নতুন ভিজিট ফি (৳)',
+                  prefixIcon: Icon(Icons.money),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: followUpCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'ফলো-আপ ভিজিট ফি (৳)',
+                  prefixIcon: Icon(Icons.repeat),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('বাতিল'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final firstFee = double.tryParse(visitCtrl.text.trim()) ?? 1000.0;
+              final followFee =
+                  double.tryParse(followUpCtrl.text.trim()) ?? 0.0;
+              await ref.read(clinicSettingsProvider).update(
+                    newFirstVisitFee: firstFee,
+                    newFollowUpFee: followFee,
+                    newClinicName: nameCtrl.text,
+                    newClinicPhone: phoneCtrl.text,
+                  );
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('সংরক্ষণ'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final proceduresAsync = ref.watch(procedurePricesProvider);
     final authRepo = ref.watch(authRepositoryProvider);
+    final clinicSettings = ref.watch(clinicSettingsProvider);
     final profile = authRepo.currentProfile;
 
     return Scaffold(
@@ -312,6 +393,53 @@ class SettingsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ─── Section 1.5: Visit Fee & Clinic Settings ────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'ভিজিট ফি ও ক্লিনিক তথ্য',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal,
+                    ),
+              ),
+              TextButton.icon(
+                onPressed: () => _editClinicSettingsDialog(context, ref),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('পরিবর্তন'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.local_hospital, color: Colors.teal),
+                  title: Text(clinicSettings.clinicName,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('ফোন: ${clinicSettings.clinicPhone}'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.payments, color: Colors.teal),
+                  title: const Text('ডিফল্ট ভিজিট ফি'),
+                  subtitle: Text(
+                    'নতুন ভিজিট: ৳${_currencyFormat.format(clinicSettings.firstVisitFee)}  •  ফলো-আপ: ৳${_currencyFormat.format(clinicSettings.followUpFee)}',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _editClinicSettingsDialog(context, ref),
+                ),
+              ],
             ),
           ),
 

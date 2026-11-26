@@ -94,7 +94,7 @@ class DashboardScreen extends ConsumerWidget {
 
               const SizedBox(height: 12),
 
-              // 5. Total Dues Card
+              // 5. Total Dues Card (Tappable -> Due Patients List)
               totalDues.when(
                 data: (dues) {
                   final dueAmount = dues.toDouble();
@@ -107,48 +107,53 @@ class DashboardScreen extends ConsumerWidget {
                     color: isOverdue
                         ? Colors.red.shade50
                         : Colors.teal.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 16),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: isOverdue
-                                ? Colors.red.shade100
-                                : Colors.teal.shade100,
-                            child: Icon(
-                              Icons.account_balance_wallet,
-                              color: isOverdue ? Colors.red : Colors.teal,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => context.go('/accounts?tab=1'),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 16),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: isOverdue
+                                  ? Colors.red.shade100
+                                  : Colors.teal.shade100,
+                              child: Icon(
+                                Icons.account_balance_wallet,
+                                color: isOverdue ? Colors.red : Colors.teal,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'মোট বাকি',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black54,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'মোট বাকি (বকেয়া তালিকা দেখতে ট্যাপ করুন)',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.black54,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _formatCurrency(dueAmount),
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: isOverdue
-                                        ? Colors.red
-                                        : Colors.teal,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatCurrency(dueAmount),
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: isOverdue
+                                          ? Colors.red
+                                          : Colors.teal,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                            const Icon(Icons.chevron_right, color: Colors.black45),
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -194,6 +199,28 @@ class DashboardScreen extends ConsumerWidget {
                       label: 'নতুন অ্যাপয়েন্টমেন্ট',
                       color: Colors.teal.shade700,
                       onTap: () => context.push('/appointments/add'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'হিসাব ও বকেয়া',
+                      color: Colors.blue.shade700,
+                      onTap: () => context.go('/accounts'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionButton(
+                      icon: Icons.event_repeat,
+                      label: 'বকেয়া ভিজিট (Due)',
+                      color: Colors.orange.shade800,
+                      onTap: () => context.push('/appointments/due-visits'),
                     ),
                   ),
                 ],

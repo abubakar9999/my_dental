@@ -1,12 +1,16 @@
 import 'dart:convert';
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/utils/whatsapp_helper.dart';
 import '../../data/local/database.dart';
 import '../dental_chart/dental_chart_view.dart';
+import '../payments/billing_pdf.dart';
 import '../prescriptions/prescription_pdf.dart';
 
 class PatientDetailScreen extends ConsumerStatefulWidget {
@@ -28,7 +32,7 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
   }
 
   @override
@@ -74,12 +78,15 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
   Widget build(BuildContext context) {
     final patientAsync = ref.watch(patientProvider(widget.patientId));
     final treatmentsStream = ref.watch(treatmentsForPatientProvider(widget.patientId));
+    final investigationsStream = ref.watch(investigationsForPatientProvider(widget.patientId));
     final paymentsStream = ref.watch(paymentsForPatientProvider(widget.patientId));
     final prescriptionsStream = ref.watch(prescriptionsForPatientProvider(widget.patientId));
     final appointmentsFuture = ref.watch(appointmentsForPatientProvider(widget.patientId));
 
     final totalCostFuture = ref.watch(totalCostForPatientProvider(widget.patientId));
     final totalPaidFuture = ref.watch(totalPaidForPatientProvider(widget.patientId));
+    final totalDiscountFuture =
+        ref.watch(totalDiscountForPatientProvider(widget.patientId));
 
     return patientAsync.when(
       data: (patient) {
@@ -325,7 +332,8 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                                         data: (cost) {
                                           return totalPaidFuture.when(
                                             data: (paid) {
-                                              final due = cost - paid;
+                                              final disc = totalDiscountFuture.valueOrNull ?? 0.0;
+                                              final due = cost - (paid + disc);
                                               return Text(
                                                 '৳${_currencyFormat.format(due > 0 ? due : 0)}',
                                                 style: TextStyle(
@@ -349,6 +357,82 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                             ),
                           ],
                         ),
+                        if ((totalDiscountFuture.valueOrNull ?? 0.0) > 0) ...[
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Chip(
+                              avatar: const Icon(Icons.discount_outlined,
+                                  size: 16, color: Colors.deepOrange),
+                              label: Text(
+                                'মোট ডিসকাউন্ট: ৳${_currencyFormat.format(totalDiscountFuture.valueOrNull ?? 0.0)}',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.deepOrange),
+                              ),
+                              backgroundColor: Colors.orange.shade50,
+                              side: BorderSide(color: Colors.orange.shade200),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  final db = ref.read(databaseProvider);
+                                  final txs = await db.getTreatmentsForPatient(patient.id);
+                                  final invs = await db.watchInvestigationsForPatient(patient.id).first;
+                                  final pays = await db.getPaymentsForPatient(patient.id);
+                                  final settings = ref.read(clinicSettingsProvider);
+                                  final doctor = ref.read(authRepositoryProvider).currentName;
+                                  await BillingPdfGenerator.printInvoice(
+                                    patient: patient,
+                                    treatments: txs,
+                                    investigations: invs,
+                                    payments: pays,
+                                    clinicName: settings.clinicName,
+                                    clinicPhone: settings.clinicPhone,
+                                    doctorName: doctor,
+                                  );
+                                },
+                                icon: const Icon(Icons.receipt_long, size: 17),
+                                label: const Text('বিল প্রিন্ট / PDF', style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  final db = ref.read(databaseProvider);
+                                  final txs = await db.getTreatmentsForPatient(patient.id);
+                                  final invs = await db.watchInvestigationsForPatient(patient.id).first;
+                                  final pays = await db.getPaymentsForPatient(patient.id);
+                                  final settings = ref.read(clinicSettingsProvider);
+                                  final doctor = ref.read(authRepositoryProvider).currentName;
+                                  await BillingPdfGenerator.shareInvoiceToWhatsApp(
+                                    patient: patient,
+                                    treatments: txs,
+                                    investigations: invs,
+                                    payments: pays,
+                                    clinicName: settings.clinicName,
+                                    clinicPhone: settings.clinicPhone,
+                                    doctorName: doctor,
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.green.shade800,
+                                  side: BorderSide(color: Colors.green.shade300),
+                                ),
+                                icon: const Icon(Icons.share, size: 17),
+                                label: const Text('WhatsApp বিল PDF', style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -358,12 +442,15 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                   delegate: _SliverAppBarDelegate(
                     TabBar(
                       controller: _tabController,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       labelColor: Colors.teal,
                       unselectedLabelColor: Colors.grey,
                       indicatorColor: Colors.teal,
                       tabs: const [
                         Tab(text: 'ডেন্টাল চার্ট'),
                         Tab(text: 'চিকিৎসা'),
+                        Tab(text: 'ইনভেস্টিগেশন'),
                         Tab(text: 'পেমেন্ট'),
                         Tab(text: 'প্রেসক্রিপশন'),
                         Tab(text: 'অ্যাপয়েন্টমেন্ট'),
@@ -382,13 +469,16 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                 // 2. Treatments Tab
                 _buildTreatmentsTab(treatmentsStream),
 
-                // 3. Payments Tab
+                // 3. Investigations Tab
+                _buildInvestigationsTab(investigationsStream),
+
+                // 4. Payments Tab
                 _buildPaymentsTab(paymentsStream),
 
-                // 4. Prescriptions Tab
+                // 5. Prescriptions Tab
                 _buildPrescriptionsTab(prescriptionsStream, patient),
 
-                // 5. Appointments Tab
+                // 6. Appointments Tab
                 _buildAppointmentsTab(appointmentsFuture),
               ],
             ),
@@ -493,6 +583,273 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
     );
   }
 
+  void _showAddInvestigationDialog() {
+    final nameController = TextEditingController();
+    final toothController = TextEditingController();
+    final costController = TextEditingController(text: '0');
+    final notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('নতুন ইনভেস্টিগেশন অ্যাসাইন'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: AppConstants.defaultInvestigations.map((item) {
+                  final name = item['name'] as String;
+                  final price = (item['price'] as num).toDouble();
+                  return ActionChip(
+                    label: Text(name, style: const TextStyle(fontSize: 11)),
+                    onPressed: () {
+                      nameController.text = name;
+                      costController.text = price.toStringAsFixed(0);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'পরীক্ষার নাম *',
+                  hintText: 'OPG / IOPA X-Ray',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: toothController,
+                decoration: const InputDecoration(
+                  labelText: 'দাঁত নম্বর (ঐচ্ছিক)',
+                  hintText: '36',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: costController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'ফি (৳) (০ দিলে বিলে যোগ হবে না)',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  labelText: 'নোট / নির্দেশনা',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('বাতিল'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isEmpty) return;
+              final cost = double.tryParse(costController.text.trim()) ?? 0.0;
+              final tooth = toothController.text.trim();
+              final notes = notesController.text.trim();
+              final db = ref.read(databaseProvider);
+
+              await db.insertInvestigation(
+                InvestigationsCompanion.insert(
+                  patientId: widget.patientId,
+                  testName: name,
+                  toothNumber: drift.Value(tooth.isEmpty ? null : tooth),
+                  cost: drift.Value(cost),
+                  resultNotes: drift.Value(notes.isEmpty ? null : notes),
+                  date: DateTime.now(),
+                ),
+              );
+              ref.invalidate(totalCostForPatientProvider(widget.patientId));
+              ref.invalidate(totalDuesProvider);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('অ্যাসাইন করুন'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUpdateInvestigationDialog(Investigation inv) {
+    String selectedStatus = inv.status;
+    final notesController = TextEditingController(text: inv.resultNotes ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(inv.testName),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedStatus,
+                decoration: const InputDecoration(labelText: 'স্ট্যাটাস'),
+                items: const [
+                  DropdownMenuItem(value: 'pending', child: Text('অপেক্ষমাণ (Pending)')),
+                  DropdownMenuItem(value: 'completed', child: Text('সম্পন্ন (Completed)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setDialogState(() => selectedStatus = val);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'রিপোর্ট / ফলাফল নোট',
+                  hintText: 'উদাঃ Periapical radiolucency seen...',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('বাতিল'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await ref.read(databaseProvider).updateInvestigationStatus(
+                      inv.id,
+                      selectedStatus,
+                      resultNotes: notesController.text.trim(),
+                    );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('আপডেট করুন'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvestigationsTab(
+    AsyncValue<List<Investigation>> investigationsStream,
+  ) {
+    return Scaffold(
+      body: investigationsStream.when(
+        data: (items) {
+          if (items.isEmpty) {
+            return const Center(child: Text('কোনো ইনভেস্টিগেশন অ্যাসাইন করা হয়নি'));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: items.length,
+            itemBuilder: (ctx, i) {
+              final inv = items[i];
+              final isDone = inv.status == 'completed';
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  onTap: () => _showUpdateInvestigationDialog(inv),
+                  leading: CircleAvatar(
+                    backgroundColor: isDone ? Colors.green.shade50 : Colors.orange.shade50,
+                    child: Icon(
+                      isDone ? Icons.check_circle_outline : Icons.biotech,
+                      color: isDone ? Colors.green : Colors.orange.shade700,
+                    ),
+                  ),
+                  title: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          inv.testName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      if (inv.cost > 0)
+                        Text(
+                          '৳${_currencyFormat.format(inv.cost)}',
+                          style: const TextStyle(
+                            color: Colors.teal,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDone ? Colors.green.shade50 : Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isDone ? 'সম্পন্ন' : 'অপেক্ষমাণ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: isDone ? Colors.green.shade800 : Colors.orange.shade900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (inv.toothNumber != null && inv.toothNumber!.isNotEmpty) ...[
+                            Text('দাঁত #${inv.toothNumber} • ',
+                                style: const TextStyle(fontSize: 12)),
+                          ],
+                          Text(
+                            _shortDateFormat.format(inv.date),
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                      if (inv.resultNotes != null && inv.resultNotes!.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'ফলাফল/নোট: ${inv.resultNotes}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                        ),
+                      ],
+                    ],
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                    onPressed: () async {
+                      await ref.read(databaseProvider).deleteInvestigation(inv.id);
+                      ref.invalidate(totalCostForPatientProvider(widget.patientId));
+                      ref.invalidate(totalDuesProvider);
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('ত্রুটি: $e')),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'add_investigation',
+        onPressed: _showAddInvestigationDialog,
+        icon: const Icon(Icons.biotech),
+        label: const Text('পরীক্ষা অ্যাসাইন'),
+      ),
+    );
+  }
+
   Widget _buildPaymentsTab(AsyncValue<List<Payment>> paymentsStream) {
     return Scaffold(
       body: paymentsStream.when(
@@ -513,16 +870,42 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                     backgroundColor: Colors.green.shade50,
                     child: Icon(Icons.payment, color: Colors.green.shade700),
                   ),
-                  title: Text(
-                    '৳${_currencyFormat.format(p.amount)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  title: Row(
+                    children: [
+                      Text(
+                        '৳${_currencyFormat.format(p.amount)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      if (p.discount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'ছাড়: ৳${_currencyFormat.format(p.discount)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange.shade900,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  subtitle: Text('${p.method} • ${_shortDateFormat.format(p.date)}'),
+                  subtitle: Text(
+                    '${p.category} • ${p.method} • ${_shortDateFormat.format(p.date)}'
+                    '${p.notes != null && p.notes!.isNotEmpty ? '\nনোট: ${p.notes}' : ''}',
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
                     onPressed: () async {
                       await ref.read(databaseProvider).deletePayment(p.id);
                       ref.invalidate(totalPaidForPatientProvider(widget.patientId));
+                      ref.invalidate(totalDiscountForPatientProvider(widget.patientId));
                       ref.invalidate(totalDuesProvider);
                       ref.invalidate(todayIncomeProvider);
                       ref.invalidate(monthlyIncomeProvider);
@@ -565,6 +948,17 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                 medList = jsonDecode(rx.medicines) as List<dynamic>;
               } catch (_) {}
 
+              List<dynamic> invList = [];
+              try {
+                invList = jsonDecode(rx.investigations) as List<dynamic>;
+              } catch (_) {}
+
+              final convertedMeds =
+                  medList.map((m) => Map<String, dynamic>.from(m as Map)).toList();
+              final convertedInvs =
+                  invList.map((m) => Map<String, dynamic>.from(m as Map)).toList();
+              final profile = ref.read(authRepositoryProvider).currentProfile;
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -587,20 +981,71 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                             ],
                           ),
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.print, color: Colors.teal),
-                                tooltip: 'প্রিন্ট / শেয়ার PDF',
-                                onPressed: () {
-                                  final converted = medList
-                                      .map((m) => Map<String, dynamic>.from(m as Map))
-                                      .toList();
-                                  PrescriptionPdfGenerator.generate(
+                                icon: Icon(Icons.share, color: Colors.green.shade700),
+                                tooltip: 'WhatsApp-এ PDF শেয়ার',
+                                onPressed: () async {
+                                  final db = ref.read(databaseProvider);
+                                  final cost = await db.getTotalCostForPatient(patient.id);
+                                  final paid = await db.getTotalPaidForPatient(patient.id);
+                                  final due = cost - paid;
+                                  await PrescriptionPdfGenerator.sharePdf(
                                     patientName: patient.name,
                                     patientPhone: patient.phone,
                                     patientAge: patient.age ?? 0,
-                                    medicines: converted,
+                                    medicines: convertedMeds,
+                                    investigations: convertedInvs,
                                     advice: rx.advice,
+                                    nextVisitDate: rx.nextVisitDate,
+                                    doctorName: rx.doctorName ?? profile?.fullName,
+                                    doctorQualification: profile?.qualification,
+                                    doctorPhone: profile?.phone,
+                                    currentDue: due > 0 ? due : null,
+                                    prescriptionDate: rx.date,
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.chat_outlined, color: Colors.green.shade600),
+                                tooltip: 'সরাসরি WhatsApp চ্যাট',
+                                onPressed: () async {
+                                  final text = PrescriptionPdfGenerator.buildWhatsAppSummaryText(
+                                    patientName: patient.name,
+                                    medicines: convertedMeds,
+                                    investigations: convertedInvs,
+                                    advice: rx.advice,
+                                    nextVisitDate: rx.nextVisitDate,
+                                    doctorName: rx.doctorName ?? profile?.fullName,
+                                  );
+                                  await WhatsAppHelper.openWhatsAppChat(
+                                    phone: patient.phone,
+                                    message: text,
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.print, color: Colors.teal),
+                                tooltip: 'প্রিন্ট / PDF',
+                                onPressed: () async {
+                                  final db = ref.read(databaseProvider);
+                                  final cost = await db.getTotalCostForPatient(patient.id);
+                                  final paid = await db.getTotalPaidForPatient(patient.id);
+                                  final due = cost - paid;
+                                  await PrescriptionPdfGenerator.generate(
+                                    patientName: patient.name,
+                                    patientPhone: patient.phone,
+                                    patientAge: patient.age ?? 0,
+                                    medicines: convertedMeds,
+                                    investigations: convertedInvs,
+                                    advice: rx.advice,
+                                    nextVisitDate: rx.nextVisitDate,
+                                    doctorName: rx.doctorName ?? profile?.fullName,
+                                    doctorQualification: profile?.qualification,
+                                    doctorPhone: profile?.phone,
+                                    currentDue: due > 0 ? due : null,
+                                    prescriptionDate: rx.date,
                                   );
                                 },
                               ),
@@ -615,6 +1060,24 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                         ],
                       ),
                       const Divider(),
+                      if (convertedInvs.isNotEmpty) ...[
+                        const Text(
+                          'পরীক্ষা (Investigations):',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.teal),
+                        ),
+                        const SizedBox(height: 2),
+                        ...convertedInvs.map((inv) {
+                          final tooth = inv['toothNumber']?.toString() ?? '';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 1.5),
+                            child: Text(
+                              '• ${inv['name'] ?? ''}${tooth.isNotEmpty ? ' (দাঁত #$tooth)' : ''}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 6),
+                      ],
                       ...medList.map((m) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 2.0),
@@ -632,6 +1095,24 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                             fontStyle: FontStyle.italic,
                             color: Colors.grey.shade700,
                             fontSize: 13,
+                          ),
+                        ),
+                      ],
+                      if (rx.nextVisitDate != null) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'পরবর্তী ভিজিট: ${_shortDateFormat.format(rx.nextVisitDate!)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange.shade900,
+                            ),
                           ),
                         ),
                       ],

@@ -9,7 +9,8 @@ class AppShell extends StatelessWidget {
     final location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/patients')) return 1;
     if (location.startsWith('/appointments')) return 2;
-    if (location.startsWith('/settings')) return 3;
+    if (location.startsWith('/accounts')) return 3;
+    if (location.startsWith('/settings')) return 4;
     return 0;
   }
 
@@ -31,6 +32,9 @@ class AppShell extends StatelessWidget {
               context.go('/appointments');
               break;
             case 3:
+              context.go('/accounts');
+              break;
+            case 4:
               context.go('/settings');
               break;
           }
@@ -49,7 +53,12 @@ class AppShell extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month),
-            label: 'অ্যাপয়েন্টমেন্ট',
+            label: 'ভিজিট',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'হিসাব',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

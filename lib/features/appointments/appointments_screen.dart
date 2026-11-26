@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/utils/whatsapp_helper.dart';
 import '../../data/local/database.dart';
 
 class AppointmentsScreen extends ConsumerStatefulWidget {
@@ -44,8 +45,18 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('অ্যাপয়েন্টমেন্ট'),
+        title: const Text('অ্যাপয়েন্টমেন্ট ও ভিজিট'),
         centerTitle: true,
+        actions: [
+          TextButton.icon(
+            onPressed: () => context.push('/appointments/due-visits'),
+            icon: const Icon(Icons.event_repeat, color: Colors.white, size: 18),
+            label: const Text(
+              'Due ভিজিট',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -290,6 +301,42 @@ class _AppointmentCard extends ConsumerWidget {
                     ],
                   ],
                 ),
+                if (snapshot.hasData) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              context.push('/patients/${appointment.patientId}'),
+                          icon: const Icon(Icons.person_outline, size: 16),
+                          label: const Text('রোগী প্রোফাইল',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.push(
+                              '/patients/${appointment.patientId}/payments/add'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.payments_outlined, size: 16),
+                          label: const Text('ফি / পেমেন্ট',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      IconButton.filledTonal(
+                        tooltip: 'কল',
+                        onPressed: () => WhatsAppHelper.callPhone(patientPhone),
+                        icon: const Icon(Icons.call, size: 18),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

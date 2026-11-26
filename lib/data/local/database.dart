@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'tables.dart';
+import '../models/clinic_models.dart';
 
 part 'database.g.dart';
 
@@ -16,6 +17,8 @@ part 'database.g.dart';
   Treatments,
   Payments,
   Prescriptions,
+  Investigations,
+  Expenses,
   ProcedurePrices,
   ToothConditions,
 ])
@@ -23,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +43,20 @@ class AppDatabase extends _$AppDatabase {
           if (from < 4 && from >= 3) {
             await m.addColumn(users, users.phone);
           }
+          if (from < 5) {
+            if (from >= 1) {
+              await m.addColumn(prescriptions, prescriptions.investigations);
+              await m.addColumn(prescriptions, prescriptions.nextVisitDate);
+              await m.addColumn(prescriptions, prescriptions.doctorName);
+            }
+            await m.createTable(investigations);
+            await m.createTable(expenses);
+          }
+          if (from < 6 && from >= 1) {
+            await m.addColumn(payments, payments.discount);
+            await m.addColumn(payments, payments.category);
+            await m.addColumn(payments, payments.notes);
+          }
         },
       );
 
@@ -55,8 +72,21 @@ class AppDatabase extends _$AppDatabase {
   Future<User?> getUserByIdentifier(String identifier) {
     final clean = identifier.trim();
     final lower = clean.toLowerCase();
+    final phoneVariants = <String>{clean};
+    if (clean.startsWith('01') && clean.length == 11) {
+      phoneVariants.add('88$clean');
+      phoneVariants.add('+88$clean');
+    } else if (clean.startsWith('8801') && clean.length == 13) {
+      phoneVariants.add('0${clean.substring(3)}');
+      phoneVariants.add('+$clean');
+    } else if (clean.startsWith('+8801') && clean.length == 14) {
+      phoneVariants.add(clean.substring(1));
+      phoneVariants.add('0${clean.substring(4)}');
+    }
+
     return (select(users)
-          ..where((t) => t.email.lower().equals(lower) | t.phone.equals(clean))
+          ..where((t) =>
+              t.email.lower().equals(lower) | t.phone.isIn(phoneVariants))
           ..limit(1))
         .getSingleOrNull();
   }
@@ -119,8 +149,9 @@ class AppDatabase extends _$AppDatabase {
       (delete(users)..where((t) => t.id.equals(id))).go();
 
   Future<void> seedDefaultUser() async {
-    final existing = await getAllUsers();
-    if (existing.isEmpty) {
+    final hasDefaultDoctor = await getUserByIdentifier('doctor@dental.com') ??
+        await getUserByIdentifier('01700000000');
+    if (hasDefaultDoctor == null) {
       await into(users).insert(
         const UsersCompanion(
           name: Value('ডা. ডেন্টিস্ট (Admin)'),
@@ -130,6 +161,7 @@ class AppDatabase extends _$AppDatabase {
           role: Value('dentist'),
           isActive: Value(true),
         ),
+        mode: InsertMode.insertOrIgnore,
       );
     }
   }
@@ -253,12 +285,19 @@ class AppDatabase extends _$AppDatabase {
       (delete(treatments)..where((t) => t.id.equals(id))).go();
 
   Future<double> getTotalCostForPatient(int patientId) async {
-    final cost = treatments.cost.sum();
-    final query = selectOnly(treatments)
-      ..addColumns([cost])
+    final tCost = treatments.cost.sum();
+    final tQuery = selectOnly(treatments)
+      ..addColumns([tCost])
       ..where(treatments.patientId.equals(patientId));
-    final result = await query.getSingle();
-    return result.read(cost) ?? 0.0;
+    final tResult = await tQuery.getSingle();
+
+    final iCost = investigations.cost.sum();
+    final iQuery = selectOnly(investigations)
+      ..addColumns([iCost])
+      ..where(investigations.patientId.equals(patientId));
+    final iResult = await iQuery.getSingle();
+
+    return (tResult.read(tCost) ?? 0.0) + (iResult.read(iCost) ?? 0.0);
   }
 
   // ─── Payments ────────────────────────────────────────────
@@ -283,6 +322,15 @@ class AppDatabase extends _$AppDatabase {
 
   Future<double> getTotalPaidForPatient(int patientId) async {
     final total = payments.amount.sum();
+    final query = selectOnly(payments)
+      ..addColumns([total])
+      ..where(payments.patientId.equals(patientId));
+    final result = await query.getSingle();
+    return result.read(total) ?? 0.0;
+  }
+
+  Future<double> getTotalDiscountForPatient(int patientId) async {
+    final total = payments.discount.sum();
     final query = selectOnly(payments)
       ..addColumns([total])
       ..where(payments.patientId.equals(patientId));
@@ -320,14 +368,22 @@ class AppDatabase extends _$AppDatabase {
     final totalCost = treatments.cost.sum();
     final costQuery = selectOnly(treatments)..addColumns([totalCost]);
     final costResult = await costQuery.getSingle();
-    final allCost = costResult.read(totalCost) ?? 0.0;
+    final allTreatmentCost = costResult.read(totalCost) ?? 0.0;
+
+    final totalInvCost = investigations.cost.sum();
+    final invQuery = selectOnly(investigations)..addColumns([totalInvCost]);
+    final invResult = await invQuery.getSingle();
+    final allInvCost = invResult.read(totalInvCost) ?? 0.0;
 
     final totalPaid = payments.amount.sum();
-    final paidQuery = selectOnly(payments)..addColumns([totalPaid]);
+    final totalDisc = payments.discount.sum();
+    final paidQuery = selectOnly(payments)..addColumns([totalPaid, totalDisc]);
     final paidResult = await paidQuery.getSingle();
     final allPaid = paidResult.read(totalPaid) ?? 0.0;
+    final allDiscount = paidResult.read(totalDisc) ?? 0.0;
 
-    return allCost - allPaid;
+    final due = (allTreatmentCost + allInvCost) - (allPaid + allDiscount);
+    return due > 0 ? due : 0.0;
   }
 
   // ─── Prescriptions ──────────────────────────────────────
@@ -376,6 +432,7 @@ class AppDatabase extends _$AppDatabase {
 
     await batch((b) {
       for (final proc in [
+        {'name': 'ভিজিট / পরামর্শ (Visit Fee)', 'price': 1000.0},
         {'name': 'স্কেলিং (Scaling)', 'price': 2000.0},
         {'name': 'ফিলিং (Filling)', 'price': 1500.0},
         {'name': 'RCT (Root Canal)', 'price': 8000.0},
@@ -452,6 +509,221 @@ class AppDatabase extends _$AppDatabase {
                 t.patientId.equals(patientId) &
                 t.toothNumber.equals(toothNumber)))
           .go();
+
+  // ─── Investigations ─────────────────────────────────────
+
+  Stream<List<Investigation>> watchInvestigationsForPatient(int patientId) =>
+      (select(investigations)
+            ..where((t) => t.patientId.equals(patientId))
+            ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+          .watch();
+
+  Future<int> insertInvestigation(InvestigationsCompanion entry) =>
+      into(investigations).insert(entry);
+
+  Future<void> updateInvestigationStatus(
+    int id,
+    String status, {
+    String? resultNotes,
+  }) =>
+      (update(investigations)..where((t) => t.id.equals(id))).write(
+        InvestigationsCompanion(
+          status: Value(status),
+          resultNotes:
+              resultNotes != null ? Value(resultNotes) : const Value.absent(),
+        ),
+      );
+
+  Future<int> deleteInvestigation(int id) =>
+      (delete(investigations)..where((t) => t.id.equals(id))).go();
+
+  // ─── Expenses & Accounts ────────────────────────────────
+
+  Stream<List<Expense>> watchAllExpenses() => (select(expenses)
+        ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+      .watch();
+
+  Future<int> insertExpense(ExpensesCompanion entry) =>
+      into(expenses).insert(entry);
+
+  Future<int> deleteExpense(int id) =>
+      (delete(expenses)..where((t) => t.id.equals(id))).go();
+
+  Future<double> getTotalIncomeInRange(DateTime start, DateTime end) async {
+    final total = payments.amount.sum();
+    final query = selectOnly(payments)
+      ..addColumns([total])
+      ..where(payments.date.isBiggerOrEqualValue(start) &
+          payments.date.isSmallerThanValue(end));
+    final result = await query.getSingle();
+    return result.read(total) ?? 0.0;
+  }
+
+  Future<double> getTotalDiscountInRange(DateTime start, DateTime end) async {
+    final total = payments.discount.sum();
+    final query = selectOnly(payments)
+      ..addColumns([total])
+      ..where(payments.date.isBiggerOrEqualValue(start) &
+          payments.date.isSmallerThanValue(end));
+    final result = await query.getSingle();
+    return result.read(total) ?? 0.0;
+  }
+
+  Future<double> getTotalExpenseInRange(DateTime start, DateTime end) async {
+    final total = expenses.amount.sum();
+    final query = selectOnly(expenses)
+      ..addColumns([total])
+      ..where(expenses.date.isBiggerOrEqualValue(start) &
+          expenses.date.isSmallerThanValue(end));
+    final result = await query.getSingle();
+    return result.read(total) ?? 0.0;
+  }
+
+  Future<List<PaymentWithPatient>> getPaymentsInRangeWithPatient(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final rows = await (select(payments).join([
+      innerJoin(patients, patients.id.equalsExp(payments.patientId)),
+    ])
+          ..where(payments.date.isBiggerOrEqualValue(start) &
+              payments.date.isSmallerThanValue(end))
+          ..orderBy([OrderingTerm.desc(payments.date)]))
+        .get();
+
+    return rows
+        .map(
+          (r) => PaymentWithPatient(
+            payment: r.readTable(payments),
+            patient: r.readTable(patients),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<Expense>> getExpensesInRange(DateTime start, DateTime end) =>
+      (select(expenses)
+            ..where((t) =>
+                t.date.isBiggerOrEqualValue(start) &
+                t.date.isSmallerThanValue(end))
+            ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+          .get();
+
+  // ─── Due Patients & Due Visits ──────────────────────────
+
+  Future<List<PatientDueSummary>> getPatientsWithDue() async {
+    final allPatients = await select(patients).get();
+    final allTreatments = await select(treatments).get();
+    final allInvestigations = await select(investigations).get();
+    final allPayments = await select(payments).get();
+    final allAppts = await select(appointments).get();
+
+    final costByPatient = <int, double>{};
+    final lastVisitByPatient = <int, DateTime>{};
+
+    void trackDate(int pid, DateTime d) {
+      final prev = lastVisitByPatient[pid];
+      if (prev == null || d.isAfter(prev)) {
+        lastVisitByPatient[pid] = d;
+      }
+    }
+
+    for (final t in allTreatments) {
+      costByPatient[t.patientId] = (costByPatient[t.patientId] ?? 0.0) + t.cost;
+      trackDate(t.patientId, t.date);
+    }
+    for (final inv in allInvestigations) {
+      costByPatient[inv.patientId] =
+          (costByPatient[inv.patientId] ?? 0.0) + inv.cost;
+      trackDate(inv.patientId, inv.date);
+    }
+
+    final paidByPatient = <int, double>{};
+    final discountByPatient = <int, double>{};
+    for (final p in allPayments) {
+      paidByPatient[p.patientId] = (paidByPatient[p.patientId] ?? 0.0) + p.amount;
+      discountByPatient[p.patientId] =
+          (discountByPatient[p.patientId] ?? 0.0) + p.discount;
+    }
+
+    for (final a in allAppts) {
+      if (a.status == 'completed') {
+        trackDate(a.patientId, a.appointmentDate);
+      }
+    }
+
+    final dues = <PatientDueSummary>[];
+    for (final patient in allPatients) {
+      final cost = costByPatient[patient.id] ?? 0.0;
+      final paid = paidByPatient[patient.id] ?? 0.0;
+      final disc = discountByPatient[patient.id] ?? 0.0;
+      final due = cost - (paid + disc);
+      if (due > 0.01) {
+        dues.add(
+          PatientDueSummary(
+            patient: patient,
+            totalCost: cost,
+            totalPaid: paid,
+            totalDiscount: disc,
+            due: due,
+            lastVisitDate: lastVisitByPatient[patient.id],
+          ),
+        );
+      }
+    }
+
+    dues.sort((a, b) => b.due.compareTo(a.due));
+    return dues;
+  }
+
+  Stream<List<PatientDueSummary>> watchPatientsWithDue() {
+    return customSelect(
+      'SELECT 1',
+      readsFrom: {patients, treatments, investigations, payments, appointments},
+    ).watch().asyncMap((_) => getPatientsWithDue());
+  }
+
+  Future<List<AppointmentWithPatient>> getWaitingVisits({
+    required bool overdueOnly,
+  }) async {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+
+    final query = select(appointments).join([
+      innerJoin(patients, patients.id.equalsExp(appointments.patientId)),
+    ]);
+
+    if (overdueOnly) {
+      query
+        ..where(appointments.status.equals('waiting') &
+            appointments.appointmentDate.isSmallerThanValue(startOfToday))
+        ..orderBy([OrderingTerm.desc(appointments.appointmentDate)]);
+    } else {
+      query
+        ..where(appointments.status.equals('waiting') &
+            appointments.appointmentDate.isBiggerOrEqualValue(startOfToday))
+        ..orderBy([OrderingTerm.asc(appointments.appointmentDate)]);
+    }
+
+    final rows = await query.get();
+    return rows
+        .map(
+          (r) => AppointmentWithPatient(
+            appointment: r.readTable(appointments),
+            patient: r.readTable(patients),
+          ),
+        )
+        .toList();
+  }
+
+  Stream<List<AppointmentWithPatient>> watchWaitingVisits({
+    required bool overdueOnly,
+  }) {
+    return customSelect(
+      'SELECT 1',
+      readsFrom: {appointments, patients},
+    ).watch().asyncMap((_) => getWaitingVisits(overdueOnly: overdueOnly));
+  }
 }
 
 // ─── Database Connection ─────────────────────────────────────

@@ -2001,6 +2001,39 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _discountMeta = const VerificationMeta(
+    'discount',
+  );
+  @override
+  late final GeneratedColumn<double> discount = GeneratedColumn<double>(
+    'discount',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('ট্রিটমেন্ট / বকেয়া'),
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _dateMeta = const VerificationMeta('date');
   @override
   late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
@@ -2037,6 +2070,9 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
     patientId,
     treatmentId,
     amount,
+    discount,
+    category,
+    notes,
     date,
     method,
     createdAt,
@@ -2080,6 +2116,24 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
       );
     } else if (isInserting) {
       context.missing(_amountMeta);
+    }
+    if (data.containsKey('discount')) {
+      context.handle(
+        _discountMeta,
+        discount.isAcceptableOrUnknown(data['discount']!, _discountMeta),
+      );
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
     }
     if (data.containsKey('date')) {
       context.handle(
@@ -2128,6 +2182,18 @@ class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
         DriftSqlType.double,
         data['${effectivePrefix}amount'],
       )!,
+      discount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}discount'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
       date: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}date'],
@@ -2154,6 +2220,9 @@ class Payment extends DataClass implements Insertable<Payment> {
   final int patientId;
   final int? treatmentId;
   final double amount;
+  final double discount;
+  final String category;
+  final String? notes;
   final DateTime date;
   final String method;
   final DateTime createdAt;
@@ -2162,6 +2231,9 @@ class Payment extends DataClass implements Insertable<Payment> {
     required this.patientId,
     this.treatmentId,
     required this.amount,
+    required this.discount,
+    required this.category,
+    this.notes,
     required this.date,
     required this.method,
     required this.createdAt,
@@ -2175,6 +2247,11 @@ class Payment extends DataClass implements Insertable<Payment> {
       map['treatment_id'] = Variable<int>(treatmentId);
     }
     map['amount'] = Variable<double>(amount);
+    map['discount'] = Variable<double>(discount);
+    map['category'] = Variable<String>(category);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
     map['date'] = Variable<DateTime>(date);
     map['method'] = Variable<String>(method);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -2189,6 +2266,11 @@ class Payment extends DataClass implements Insertable<Payment> {
           ? const Value.absent()
           : Value(treatmentId),
       amount: Value(amount),
+      discount: Value(discount),
+      category: Value(category),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
       date: Value(date),
       method: Value(method),
       createdAt: Value(createdAt),
@@ -2205,6 +2287,9 @@ class Payment extends DataClass implements Insertable<Payment> {
       patientId: serializer.fromJson<int>(json['patientId']),
       treatmentId: serializer.fromJson<int?>(json['treatmentId']),
       amount: serializer.fromJson<double>(json['amount']),
+      discount: serializer.fromJson<double>(json['discount']),
+      category: serializer.fromJson<String>(json['category']),
+      notes: serializer.fromJson<String?>(json['notes']),
       date: serializer.fromJson<DateTime>(json['date']),
       method: serializer.fromJson<String>(json['method']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -2218,6 +2303,9 @@ class Payment extends DataClass implements Insertable<Payment> {
       'patientId': serializer.toJson<int>(patientId),
       'treatmentId': serializer.toJson<int?>(treatmentId),
       'amount': serializer.toJson<double>(amount),
+      'discount': serializer.toJson<double>(discount),
+      'category': serializer.toJson<String>(category),
+      'notes': serializer.toJson<String?>(notes),
       'date': serializer.toJson<DateTime>(date),
       'method': serializer.toJson<String>(method),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -2229,6 +2317,9 @@ class Payment extends DataClass implements Insertable<Payment> {
     int? patientId,
     Value<int?> treatmentId = const Value.absent(),
     double? amount,
+    double? discount,
+    String? category,
+    Value<String?> notes = const Value.absent(),
     DateTime? date,
     String? method,
     DateTime? createdAt,
@@ -2237,6 +2328,9 @@ class Payment extends DataClass implements Insertable<Payment> {
     patientId: patientId ?? this.patientId,
     treatmentId: treatmentId.present ? treatmentId.value : this.treatmentId,
     amount: amount ?? this.amount,
+    discount: discount ?? this.discount,
+    category: category ?? this.category,
+    notes: notes.present ? notes.value : this.notes,
     date: date ?? this.date,
     method: method ?? this.method,
     createdAt: createdAt ?? this.createdAt,
@@ -2249,6 +2343,9 @@ class Payment extends DataClass implements Insertable<Payment> {
           ? data.treatmentId.value
           : this.treatmentId,
       amount: data.amount.present ? data.amount.value : this.amount,
+      discount: data.discount.present ? data.discount.value : this.discount,
+      category: data.category.present ? data.category.value : this.category,
+      notes: data.notes.present ? data.notes.value : this.notes,
       date: data.date.present ? data.date.value : this.date,
       method: data.method.present ? data.method.value : this.method,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -2262,6 +2359,9 @@ class Payment extends DataClass implements Insertable<Payment> {
           ..write('patientId: $patientId, ')
           ..write('treatmentId: $treatmentId, ')
           ..write('amount: $amount, ')
+          ..write('discount: $discount, ')
+          ..write('category: $category, ')
+          ..write('notes: $notes, ')
           ..write('date: $date, ')
           ..write('method: $method, ')
           ..write('createdAt: $createdAt')
@@ -2270,8 +2370,18 @@ class Payment extends DataClass implements Insertable<Payment> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, patientId, treatmentId, amount, date, method, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    patientId,
+    treatmentId,
+    amount,
+    discount,
+    category,
+    notes,
+    date,
+    method,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2280,6 +2390,9 @@ class Payment extends DataClass implements Insertable<Payment> {
           other.patientId == this.patientId &&
           other.treatmentId == this.treatmentId &&
           other.amount == this.amount &&
+          other.discount == this.discount &&
+          other.category == this.category &&
+          other.notes == this.notes &&
           other.date == this.date &&
           other.method == this.method &&
           other.createdAt == this.createdAt);
@@ -2290,6 +2403,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
   final Value<int> patientId;
   final Value<int?> treatmentId;
   final Value<double> amount;
+  final Value<double> discount;
+  final Value<String> category;
+  final Value<String?> notes;
   final Value<DateTime> date;
   final Value<String> method;
   final Value<DateTime> createdAt;
@@ -2298,6 +2414,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     this.patientId = const Value.absent(),
     this.treatmentId = const Value.absent(),
     this.amount = const Value.absent(),
+    this.discount = const Value.absent(),
+    this.category = const Value.absent(),
+    this.notes = const Value.absent(),
     this.date = const Value.absent(),
     this.method = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -2307,6 +2426,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     required int patientId,
     this.treatmentId = const Value.absent(),
     required double amount,
+    this.discount = const Value.absent(),
+    this.category = const Value.absent(),
+    this.notes = const Value.absent(),
     required DateTime date,
     required String method,
     this.createdAt = const Value.absent(),
@@ -2319,6 +2441,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     Expression<int>? patientId,
     Expression<int>? treatmentId,
     Expression<double>? amount,
+    Expression<double>? discount,
+    Expression<String>? category,
+    Expression<String>? notes,
     Expression<DateTime>? date,
     Expression<String>? method,
     Expression<DateTime>? createdAt,
@@ -2328,6 +2453,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
       if (patientId != null) 'patient_id': patientId,
       if (treatmentId != null) 'treatment_id': treatmentId,
       if (amount != null) 'amount': amount,
+      if (discount != null) 'discount': discount,
+      if (category != null) 'category': category,
+      if (notes != null) 'notes': notes,
       if (date != null) 'date': date,
       if (method != null) 'method': method,
       if (createdAt != null) 'created_at': createdAt,
@@ -2339,6 +2467,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     Value<int>? patientId,
     Value<int?>? treatmentId,
     Value<double>? amount,
+    Value<double>? discount,
+    Value<String>? category,
+    Value<String?>? notes,
     Value<DateTime>? date,
     Value<String>? method,
     Value<DateTime>? createdAt,
@@ -2348,6 +2479,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
       patientId: patientId ?? this.patientId,
       treatmentId: treatmentId ?? this.treatmentId,
       amount: amount ?? this.amount,
+      discount: discount ?? this.discount,
+      category: category ?? this.category,
+      notes: notes ?? this.notes,
       date: date ?? this.date,
       method: method ?? this.method,
       createdAt: createdAt ?? this.createdAt,
@@ -2369,6 +2503,15 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
     if (amount.present) {
       map['amount'] = Variable<double>(amount.value);
     }
+    if (discount.present) {
+      map['discount'] = Variable<double>(discount.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
     }
@@ -2388,6 +2531,9 @@ class PaymentsCompanion extends UpdateCompanion<Payment> {
           ..write('patientId: $patientId, ')
           ..write('treatmentId: $treatmentId, ')
           ..write('amount: $amount, ')
+          ..write('discount: $discount, ')
+          ..write('category: $category, ')
+          ..write('notes: $notes, ')
           ..write('date: $date, ')
           ..write('method: $method, ')
           ..write('createdAt: $createdAt')
@@ -2449,10 +2595,45 @@ class $PrescriptionsTable extends Prescriptions
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _investigationsMeta = const VerificationMeta(
+    'investigations',
+  );
+  @override
+  late final GeneratedColumn<String> investigations = GeneratedColumn<String>(
+    'investigations',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('[]'),
+  );
   static const VerificationMeta _adviceMeta = const VerificationMeta('advice');
   @override
   late final GeneratedColumn<String> advice = GeneratedColumn<String>(
     'advice',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nextVisitDateMeta = const VerificationMeta(
+    'nextVisitDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> nextVisitDate =
+      GeneratedColumn<DateTime>(
+        'next_visit_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _doctorNameMeta = const VerificationMeta(
+    'doctorName',
+  );
+  @override
+  late final GeneratedColumn<String> doctorName = GeneratedColumn<String>(
+    'doctor_name',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -2476,7 +2657,10 @@ class $PrescriptionsTable extends Prescriptions
     patientId,
     date,
     medicines,
+    investigations,
     advice,
+    nextVisitDate,
+    doctorName,
     createdAt,
   ];
   @override
@@ -2518,10 +2702,34 @@ class $PrescriptionsTable extends Prescriptions
     } else if (isInserting) {
       context.missing(_medicinesMeta);
     }
+    if (data.containsKey('investigations')) {
+      context.handle(
+        _investigationsMeta,
+        investigations.isAcceptableOrUnknown(
+          data['investigations']!,
+          _investigationsMeta,
+        ),
+      );
+    }
     if (data.containsKey('advice')) {
       context.handle(
         _adviceMeta,
         advice.isAcceptableOrUnknown(data['advice']!, _adviceMeta),
+      );
+    }
+    if (data.containsKey('next_visit_date')) {
+      context.handle(
+        _nextVisitDateMeta,
+        nextVisitDate.isAcceptableOrUnknown(
+          data['next_visit_date']!,
+          _nextVisitDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('doctor_name')) {
+      context.handle(
+        _doctorNameMeta,
+        doctorName.isAcceptableOrUnknown(data['doctor_name']!, _doctorNameMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -2555,9 +2763,21 @@ class $PrescriptionsTable extends Prescriptions
         DriftSqlType.string,
         data['${effectivePrefix}medicines'],
       )!,
+      investigations: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}investigations'],
+      )!,
       advice: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}advice'],
+      ),
+      nextVisitDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}next_visit_date'],
+      ),
+      doctorName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}doctor_name'],
       ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -2577,14 +2797,20 @@ class Prescription extends DataClass implements Insertable<Prescription> {
   final int patientId;
   final DateTime date;
   final String medicines;
+  final String investigations;
   final String? advice;
+  final DateTime? nextVisitDate;
+  final String? doctorName;
   final DateTime createdAt;
   const Prescription({
     required this.id,
     required this.patientId,
     required this.date,
     required this.medicines,
+    required this.investigations,
     this.advice,
+    this.nextVisitDate,
+    this.doctorName,
     required this.createdAt,
   });
   @override
@@ -2594,8 +2820,15 @@ class Prescription extends DataClass implements Insertable<Prescription> {
     map['patient_id'] = Variable<int>(patientId);
     map['date'] = Variable<DateTime>(date);
     map['medicines'] = Variable<String>(medicines);
+    map['investigations'] = Variable<String>(investigations);
     if (!nullToAbsent || advice != null) {
       map['advice'] = Variable<String>(advice);
+    }
+    if (!nullToAbsent || nextVisitDate != null) {
+      map['next_visit_date'] = Variable<DateTime>(nextVisitDate);
+    }
+    if (!nullToAbsent || doctorName != null) {
+      map['doctor_name'] = Variable<String>(doctorName);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -2607,9 +2840,16 @@ class Prescription extends DataClass implements Insertable<Prescription> {
       patientId: Value(patientId),
       date: Value(date),
       medicines: Value(medicines),
+      investigations: Value(investigations),
       advice: advice == null && nullToAbsent
           ? const Value.absent()
           : Value(advice),
+      nextVisitDate: nextVisitDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nextVisitDate),
+      doctorName: doctorName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(doctorName),
       createdAt: Value(createdAt),
     );
   }
@@ -2624,7 +2864,10 @@ class Prescription extends DataClass implements Insertable<Prescription> {
       patientId: serializer.fromJson<int>(json['patientId']),
       date: serializer.fromJson<DateTime>(json['date']),
       medicines: serializer.fromJson<String>(json['medicines']),
+      investigations: serializer.fromJson<String>(json['investigations']),
       advice: serializer.fromJson<String?>(json['advice']),
+      nextVisitDate: serializer.fromJson<DateTime?>(json['nextVisitDate']),
+      doctorName: serializer.fromJson<String?>(json['doctorName']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -2636,7 +2879,10 @@ class Prescription extends DataClass implements Insertable<Prescription> {
       'patientId': serializer.toJson<int>(patientId),
       'date': serializer.toJson<DateTime>(date),
       'medicines': serializer.toJson<String>(medicines),
+      'investigations': serializer.toJson<String>(investigations),
       'advice': serializer.toJson<String?>(advice),
+      'nextVisitDate': serializer.toJson<DateTime?>(nextVisitDate),
+      'doctorName': serializer.toJson<String?>(doctorName),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -2646,14 +2892,22 @@ class Prescription extends DataClass implements Insertable<Prescription> {
     int? patientId,
     DateTime? date,
     String? medicines,
+    String? investigations,
     Value<String?> advice = const Value.absent(),
+    Value<DateTime?> nextVisitDate = const Value.absent(),
+    Value<String?> doctorName = const Value.absent(),
     DateTime? createdAt,
   }) => Prescription(
     id: id ?? this.id,
     patientId: patientId ?? this.patientId,
     date: date ?? this.date,
     medicines: medicines ?? this.medicines,
+    investigations: investigations ?? this.investigations,
     advice: advice.present ? advice.value : this.advice,
+    nextVisitDate: nextVisitDate.present
+        ? nextVisitDate.value
+        : this.nextVisitDate,
+    doctorName: doctorName.present ? doctorName.value : this.doctorName,
     createdAt: createdAt ?? this.createdAt,
   );
   Prescription copyWithCompanion(PrescriptionsCompanion data) {
@@ -2662,7 +2916,16 @@ class Prescription extends DataClass implements Insertable<Prescription> {
       patientId: data.patientId.present ? data.patientId.value : this.patientId,
       date: data.date.present ? data.date.value : this.date,
       medicines: data.medicines.present ? data.medicines.value : this.medicines,
+      investigations: data.investigations.present
+          ? data.investigations.value
+          : this.investigations,
       advice: data.advice.present ? data.advice.value : this.advice,
+      nextVisitDate: data.nextVisitDate.present
+          ? data.nextVisitDate.value
+          : this.nextVisitDate,
+      doctorName: data.doctorName.present
+          ? data.doctorName.value
+          : this.doctorName,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -2674,15 +2937,27 @@ class Prescription extends DataClass implements Insertable<Prescription> {
           ..write('patientId: $patientId, ')
           ..write('date: $date, ')
           ..write('medicines: $medicines, ')
+          ..write('investigations: $investigations, ')
           ..write('advice: $advice, ')
+          ..write('nextVisitDate: $nextVisitDate, ')
+          ..write('doctorName: $doctorName, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, patientId, date, medicines, advice, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    patientId,
+    date,
+    medicines,
+    investigations,
+    advice,
+    nextVisitDate,
+    doctorName,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2691,7 +2966,10 @@ class Prescription extends DataClass implements Insertable<Prescription> {
           other.patientId == this.patientId &&
           other.date == this.date &&
           other.medicines == this.medicines &&
+          other.investigations == this.investigations &&
           other.advice == this.advice &&
+          other.nextVisitDate == this.nextVisitDate &&
+          other.doctorName == this.doctorName &&
           other.createdAt == this.createdAt);
 }
 
@@ -2700,14 +2978,20 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
   final Value<int> patientId;
   final Value<DateTime> date;
   final Value<String> medicines;
+  final Value<String> investigations;
   final Value<String?> advice;
+  final Value<DateTime?> nextVisitDate;
+  final Value<String?> doctorName;
   final Value<DateTime> createdAt;
   const PrescriptionsCompanion({
     this.id = const Value.absent(),
     this.patientId = const Value.absent(),
     this.date = const Value.absent(),
     this.medicines = const Value.absent(),
+    this.investigations = const Value.absent(),
     this.advice = const Value.absent(),
+    this.nextVisitDate = const Value.absent(),
+    this.doctorName = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   PrescriptionsCompanion.insert({
@@ -2715,7 +2999,10 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
     required int patientId,
     required DateTime date,
     required String medicines,
+    this.investigations = const Value.absent(),
     this.advice = const Value.absent(),
+    this.nextVisitDate = const Value.absent(),
+    this.doctorName = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : patientId = Value(patientId),
        date = Value(date),
@@ -2725,7 +3012,10 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
     Expression<int>? patientId,
     Expression<DateTime>? date,
     Expression<String>? medicines,
+    Expression<String>? investigations,
     Expression<String>? advice,
+    Expression<DateTime>? nextVisitDate,
+    Expression<String>? doctorName,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -2733,7 +3023,10 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
       if (patientId != null) 'patient_id': patientId,
       if (date != null) 'date': date,
       if (medicines != null) 'medicines': medicines,
+      if (investigations != null) 'investigations': investigations,
       if (advice != null) 'advice': advice,
+      if (nextVisitDate != null) 'next_visit_date': nextVisitDate,
+      if (doctorName != null) 'doctor_name': doctorName,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -2743,7 +3036,10 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
     Value<int>? patientId,
     Value<DateTime>? date,
     Value<String>? medicines,
+    Value<String>? investigations,
     Value<String?>? advice,
+    Value<DateTime?>? nextVisitDate,
+    Value<String?>? doctorName,
     Value<DateTime>? createdAt,
   }) {
     return PrescriptionsCompanion(
@@ -2751,7 +3047,10 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
       patientId: patientId ?? this.patientId,
       date: date ?? this.date,
       medicines: medicines ?? this.medicines,
+      investigations: investigations ?? this.investigations,
       advice: advice ?? this.advice,
+      nextVisitDate: nextVisitDate ?? this.nextVisitDate,
+      doctorName: doctorName ?? this.doctorName,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -2771,8 +3070,17 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
     if (medicines.present) {
       map['medicines'] = Variable<String>(medicines.value);
     }
+    if (investigations.present) {
+      map['investigations'] = Variable<String>(investigations.value);
+    }
     if (advice.present) {
       map['advice'] = Variable<String>(advice.value);
+    }
+    if (nextVisitDate.present) {
+      map['next_visit_date'] = Variable<DateTime>(nextVisitDate.value);
+    }
+    if (doctorName.present) {
+      map['doctor_name'] = Variable<String>(doctorName.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -2787,7 +3095,1000 @@ class PrescriptionsCompanion extends UpdateCompanion<Prescription> {
           ..write('patientId: $patientId, ')
           ..write('date: $date, ')
           ..write('medicines: $medicines, ')
+          ..write('investigations: $investigations, ')
           ..write('advice: $advice, ')
+          ..write('nextVisitDate: $nextVisitDate, ')
+          ..write('doctorName: $doctorName, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $InvestigationsTable extends Investigations
+    with TableInfo<$InvestigationsTable, Investigation> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $InvestigationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _patientIdMeta = const VerificationMeta(
+    'patientId',
+  );
+  @override
+  late final GeneratedColumn<int> patientId = GeneratedColumn<int>(
+    'patient_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES patients (id)',
+    ),
+  );
+  static const VerificationMeta _testNameMeta = const VerificationMeta(
+    'testName',
+  );
+  @override
+  late final GeneratedColumn<String> testName = GeneratedColumn<String>(
+    'test_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _toothNumberMeta = const VerificationMeta(
+    'toothNumber',
+  );
+  @override
+  late final GeneratedColumn<String> toothNumber = GeneratedColumn<String>(
+    'tooth_number',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('pending'),
+  );
+  static const VerificationMeta _resultNotesMeta = const VerificationMeta(
+    'resultNotes',
+  );
+  @override
+  late final GeneratedColumn<String> resultNotes = GeneratedColumn<String>(
+    'result_notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _costMeta = const VerificationMeta('cost');
+  @override
+  late final GeneratedColumn<double> cost = GeneratedColumn<double>(
+    'cost',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0.0),
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    patientId,
+    testName,
+    toothNumber,
+    status,
+    resultNotes,
+    cost,
+    date,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'investigations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Investigation> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('patient_id')) {
+      context.handle(
+        _patientIdMeta,
+        patientId.isAcceptableOrUnknown(data['patient_id']!, _patientIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_patientIdMeta);
+    }
+    if (data.containsKey('test_name')) {
+      context.handle(
+        _testNameMeta,
+        testName.isAcceptableOrUnknown(data['test_name']!, _testNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_testNameMeta);
+    }
+    if (data.containsKey('tooth_number')) {
+      context.handle(
+        _toothNumberMeta,
+        toothNumber.isAcceptableOrUnknown(
+          data['tooth_number']!,
+          _toothNumberMeta,
+        ),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('result_notes')) {
+      context.handle(
+        _resultNotesMeta,
+        resultNotes.isAcceptableOrUnknown(
+          data['result_notes']!,
+          _resultNotesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('cost')) {
+      context.handle(
+        _costMeta,
+        cost.isAcceptableOrUnknown(data['cost']!, _costMeta),
+      );
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Investigation map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Investigation(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      patientId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}patient_id'],
+      )!,
+      testName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}test_name'],
+      )!,
+      toothNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tooth_number'],
+      ),
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      resultNotes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}result_notes'],
+      ),
+      cost: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}cost'],
+      )!,
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $InvestigationsTable createAlias(String alias) {
+    return $InvestigationsTable(attachedDatabase, alias);
+  }
+}
+
+class Investigation extends DataClass implements Insertable<Investigation> {
+  final int id;
+  final int patientId;
+  final String testName;
+  final String? toothNumber;
+  final String status;
+  final String? resultNotes;
+  final double cost;
+  final DateTime date;
+  final DateTime createdAt;
+  const Investigation({
+    required this.id,
+    required this.patientId,
+    required this.testName,
+    this.toothNumber,
+    required this.status,
+    this.resultNotes,
+    required this.cost,
+    required this.date,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['patient_id'] = Variable<int>(patientId);
+    map['test_name'] = Variable<String>(testName);
+    if (!nullToAbsent || toothNumber != null) {
+      map['tooth_number'] = Variable<String>(toothNumber);
+    }
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || resultNotes != null) {
+      map['result_notes'] = Variable<String>(resultNotes);
+    }
+    map['cost'] = Variable<double>(cost);
+    map['date'] = Variable<DateTime>(date);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  InvestigationsCompanion toCompanion(bool nullToAbsent) {
+    return InvestigationsCompanion(
+      id: Value(id),
+      patientId: Value(patientId),
+      testName: Value(testName),
+      toothNumber: toothNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(toothNumber),
+      status: Value(status),
+      resultNotes: resultNotes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resultNotes),
+      cost: Value(cost),
+      date: Value(date),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Investigation.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Investigation(
+      id: serializer.fromJson<int>(json['id']),
+      patientId: serializer.fromJson<int>(json['patientId']),
+      testName: serializer.fromJson<String>(json['testName']),
+      toothNumber: serializer.fromJson<String?>(json['toothNumber']),
+      status: serializer.fromJson<String>(json['status']),
+      resultNotes: serializer.fromJson<String?>(json['resultNotes']),
+      cost: serializer.fromJson<double>(json['cost']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'patientId': serializer.toJson<int>(patientId),
+      'testName': serializer.toJson<String>(testName),
+      'toothNumber': serializer.toJson<String?>(toothNumber),
+      'status': serializer.toJson<String>(status),
+      'resultNotes': serializer.toJson<String?>(resultNotes),
+      'cost': serializer.toJson<double>(cost),
+      'date': serializer.toJson<DateTime>(date),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Investigation copyWith({
+    int? id,
+    int? patientId,
+    String? testName,
+    Value<String?> toothNumber = const Value.absent(),
+    String? status,
+    Value<String?> resultNotes = const Value.absent(),
+    double? cost,
+    DateTime? date,
+    DateTime? createdAt,
+  }) => Investigation(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    testName: testName ?? this.testName,
+    toothNumber: toothNumber.present ? toothNumber.value : this.toothNumber,
+    status: status ?? this.status,
+    resultNotes: resultNotes.present ? resultNotes.value : this.resultNotes,
+    cost: cost ?? this.cost,
+    date: date ?? this.date,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Investigation copyWithCompanion(InvestigationsCompanion data) {
+    return Investigation(
+      id: data.id.present ? data.id.value : this.id,
+      patientId: data.patientId.present ? data.patientId.value : this.patientId,
+      testName: data.testName.present ? data.testName.value : this.testName,
+      toothNumber: data.toothNumber.present
+          ? data.toothNumber.value
+          : this.toothNumber,
+      status: data.status.present ? data.status.value : this.status,
+      resultNotes: data.resultNotes.present
+          ? data.resultNotes.value
+          : this.resultNotes,
+      cost: data.cost.present ? data.cost.value : this.cost,
+      date: data.date.present ? data.date.value : this.date,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Investigation(')
+          ..write('id: $id, ')
+          ..write('patientId: $patientId, ')
+          ..write('testName: $testName, ')
+          ..write('toothNumber: $toothNumber, ')
+          ..write('status: $status, ')
+          ..write('resultNotes: $resultNotes, ')
+          ..write('cost: $cost, ')
+          ..write('date: $date, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    patientId,
+    testName,
+    toothNumber,
+    status,
+    resultNotes,
+    cost,
+    date,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Investigation &&
+          other.id == this.id &&
+          other.patientId == this.patientId &&
+          other.testName == this.testName &&
+          other.toothNumber == this.toothNumber &&
+          other.status == this.status &&
+          other.resultNotes == this.resultNotes &&
+          other.cost == this.cost &&
+          other.date == this.date &&
+          other.createdAt == this.createdAt);
+}
+
+class InvestigationsCompanion extends UpdateCompanion<Investigation> {
+  final Value<int> id;
+  final Value<int> patientId;
+  final Value<String> testName;
+  final Value<String?> toothNumber;
+  final Value<String> status;
+  final Value<String?> resultNotes;
+  final Value<double> cost;
+  final Value<DateTime> date;
+  final Value<DateTime> createdAt;
+  const InvestigationsCompanion({
+    this.id = const Value.absent(),
+    this.patientId = const Value.absent(),
+    this.testName = const Value.absent(),
+    this.toothNumber = const Value.absent(),
+    this.status = const Value.absent(),
+    this.resultNotes = const Value.absent(),
+    this.cost = const Value.absent(),
+    this.date = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  InvestigationsCompanion.insert({
+    this.id = const Value.absent(),
+    required int patientId,
+    required String testName,
+    this.toothNumber = const Value.absent(),
+    this.status = const Value.absent(),
+    this.resultNotes = const Value.absent(),
+    this.cost = const Value.absent(),
+    required DateTime date,
+    this.createdAt = const Value.absent(),
+  }) : patientId = Value(patientId),
+       testName = Value(testName),
+       date = Value(date);
+  static Insertable<Investigation> custom({
+    Expression<int>? id,
+    Expression<int>? patientId,
+    Expression<String>? testName,
+    Expression<String>? toothNumber,
+    Expression<String>? status,
+    Expression<String>? resultNotes,
+    Expression<double>? cost,
+    Expression<DateTime>? date,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (patientId != null) 'patient_id': patientId,
+      if (testName != null) 'test_name': testName,
+      if (toothNumber != null) 'tooth_number': toothNumber,
+      if (status != null) 'status': status,
+      if (resultNotes != null) 'result_notes': resultNotes,
+      if (cost != null) 'cost': cost,
+      if (date != null) 'date': date,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  InvestigationsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? patientId,
+    Value<String>? testName,
+    Value<String?>? toothNumber,
+    Value<String>? status,
+    Value<String?>? resultNotes,
+    Value<double>? cost,
+    Value<DateTime>? date,
+    Value<DateTime>? createdAt,
+  }) {
+    return InvestigationsCompanion(
+      id: id ?? this.id,
+      patientId: patientId ?? this.patientId,
+      testName: testName ?? this.testName,
+      toothNumber: toothNumber ?? this.toothNumber,
+      status: status ?? this.status,
+      resultNotes: resultNotes ?? this.resultNotes,
+      cost: cost ?? this.cost,
+      date: date ?? this.date,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (patientId.present) {
+      map['patient_id'] = Variable<int>(patientId.value);
+    }
+    if (testName.present) {
+      map['test_name'] = Variable<String>(testName.value);
+    }
+    if (toothNumber.present) {
+      map['tooth_number'] = Variable<String>(toothNumber.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (resultNotes.present) {
+      map['result_notes'] = Variable<String>(resultNotes.value);
+    }
+    if (cost.present) {
+      map['cost'] = Variable<double>(cost.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('InvestigationsCompanion(')
+          ..write('id: $id, ')
+          ..write('patientId: $patientId, ')
+          ..write('testName: $testName, ')
+          ..write('toothNumber: $toothNumber, ')
+          ..write('status: $status, ')
+          ..write('resultNotes: $resultNotes, ')
+          ..write('cost: $cost, ')
+          ..write('date: $date, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ExpensesTable extends Expenses with TableInfo<$ExpensesTable, Expense> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExpensesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _titleMeta = const VerificationMeta('title');
+  @override
+  late final GeneratedColumn<String> title = GeneratedColumn<String>(
+    'title',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+    'amount',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+    'date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _notesMeta = const VerificationMeta('notes');
+  @override
+  late final GeneratedColumn<String> notes = GeneratedColumn<String>(
+    'notes',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    title,
+    category,
+    amount,
+    date,
+    notes,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'expenses';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Expense> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('title')) {
+      context.handle(
+        _titleMeta,
+        title.isAcceptableOrUnknown(data['title']!, _titleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_titleMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('amount')) {
+      context.handle(
+        _amountMeta,
+        amount.isAcceptableOrUnknown(data['amount']!, _amountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+        _dateMeta,
+        date.isAcceptableOrUnknown(data['date']!, _dateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    if (data.containsKey('notes')) {
+      context.handle(
+        _notesMeta,
+        notes.isAcceptableOrUnknown(data['notes']!, _notesMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Expense map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Expense(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      title: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}title'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      amount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}amount'],
+      )!,
+      date: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date'],
+      )!,
+      notes: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}notes'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ExpensesTable createAlias(String alias) {
+    return $ExpensesTable(attachedDatabase, alias);
+  }
+}
+
+class Expense extends DataClass implements Insertable<Expense> {
+  final int id;
+  final String title;
+  final String category;
+  final double amount;
+  final DateTime date;
+  final String? notes;
+  final DateTime createdAt;
+  const Expense({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.amount,
+    required this.date,
+    this.notes,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['title'] = Variable<String>(title);
+    map['category'] = Variable<String>(category);
+    map['amount'] = Variable<double>(amount);
+    map['date'] = Variable<DateTime>(date);
+    if (!nullToAbsent || notes != null) {
+      map['notes'] = Variable<String>(notes);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ExpensesCompanion toCompanion(bool nullToAbsent) {
+    return ExpensesCompanion(
+      id: Value(id),
+      title: Value(title),
+      category: Value(category),
+      amount: Value(amount),
+      date: Value(date),
+      notes: notes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notes),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Expense.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Expense(
+      id: serializer.fromJson<int>(json['id']),
+      title: serializer.fromJson<String>(json['title']),
+      category: serializer.fromJson<String>(json['category']),
+      amount: serializer.fromJson<double>(json['amount']),
+      date: serializer.fromJson<DateTime>(json['date']),
+      notes: serializer.fromJson<String?>(json['notes']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'title': serializer.toJson<String>(title),
+      'category': serializer.toJson<String>(category),
+      'amount': serializer.toJson<double>(amount),
+      'date': serializer.toJson<DateTime>(date),
+      'notes': serializer.toJson<String?>(notes),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Expense copyWith({
+    int? id,
+    String? title,
+    String? category,
+    double? amount,
+    DateTime? date,
+    Value<String?> notes = const Value.absent(),
+    DateTime? createdAt,
+  }) => Expense(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    category: category ?? this.category,
+    amount: amount ?? this.amount,
+    date: date ?? this.date,
+    notes: notes.present ? notes.value : this.notes,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Expense copyWithCompanion(ExpensesCompanion data) {
+    return Expense(
+      id: data.id.present ? data.id.value : this.id,
+      title: data.title.present ? data.title.value : this.title,
+      category: data.category.present ? data.category.value : this.category,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      date: data.date.present ? data.date.value : this.date,
+      notes: data.notes.present ? data.notes.value : this.notes,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Expense(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('category: $category, ')
+          ..write('amount: $amount, ')
+          ..write('date: $date, ')
+          ..write('notes: $notes, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, title, category, amount, date, notes, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Expense &&
+          other.id == this.id &&
+          other.title == this.title &&
+          other.category == this.category &&
+          other.amount == this.amount &&
+          other.date == this.date &&
+          other.notes == this.notes &&
+          other.createdAt == this.createdAt);
+}
+
+class ExpensesCompanion extends UpdateCompanion<Expense> {
+  final Value<int> id;
+  final Value<String> title;
+  final Value<String> category;
+  final Value<double> amount;
+  final Value<DateTime> date;
+  final Value<String?> notes;
+  final Value<DateTime> createdAt;
+  const ExpensesCompanion({
+    this.id = const Value.absent(),
+    this.title = const Value.absent(),
+    this.category = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.date = const Value.absent(),
+    this.notes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ExpensesCompanion.insert({
+    this.id = const Value.absent(),
+    required String title,
+    required String category,
+    required double amount,
+    required DateTime date,
+    this.notes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : title = Value(title),
+       category = Value(category),
+       amount = Value(amount),
+       date = Value(date);
+  static Insertable<Expense> custom({
+    Expression<int>? id,
+    Expression<String>? title,
+    Expression<String>? category,
+    Expression<double>? amount,
+    Expression<DateTime>? date,
+    Expression<String>? notes,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (category != null) 'category': category,
+      if (amount != null) 'amount': amount,
+      if (date != null) 'date': date,
+      if (notes != null) 'notes': notes,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ExpensesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? title,
+    Value<String>? category,
+    Value<double>? amount,
+    Value<DateTime>? date,
+    Value<String?>? notes,
+    Value<DateTime>? createdAt,
+  }) {
+    return ExpensesCompanion(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      category: category ?? this.category,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (title.present) {
+      map['title'] = Variable<String>(title.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<double>(amount.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    if (notes.present) {
+      map['notes'] = Variable<String>(notes.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExpensesCompanion(')
+          ..write('id: $id, ')
+          ..write('title: $title, ')
+          ..write('category: $category, ')
+          ..write('amount: $amount, ')
+          ..write('date: $date, ')
+          ..write('notes: $notes, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -3515,6 +4816,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TreatmentsTable treatments = $TreatmentsTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
   late final $PrescriptionsTable prescriptions = $PrescriptionsTable(this);
+  late final $InvestigationsTable investigations = $InvestigationsTable(this);
+  late final $ExpensesTable expenses = $ExpensesTable(this);
   late final $ProcedurePricesTable procedurePrices = $ProcedurePricesTable(
     this,
   );
@@ -3532,6 +4835,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     treatments,
     payments,
     prescriptions,
+    investigations,
+    expenses,
     procedurePrices,
     toothConditions,
   ];
@@ -3888,6 +5193,24 @@ final class $$PatientsTableReferences
     );
   }
 
+  static MultiTypedResultKey<$InvestigationsTable, List<Investigation>>
+  _investigationsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.investigations,
+    aliasName: 'patients__id__investigations__patient_id',
+  );
+
+  $$InvestigationsTableProcessedTableManager get investigationsRefs {
+    final manager = $$InvestigationsTableTableManager(
+      $_db,
+      $_db.investigations,
+    ).filter((f) => f.patientId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_investigationsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
   static MultiTypedResultKey<$ToothConditionsTable, List<ToothCondition>>
   _toothConditionsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
     db.toothConditions,
@@ -4054,6 +5377,31 @@ class $$PatientsTableFilterComposer
           }) => $$PrescriptionsTableFilterComposer(
             $db: $db,
             $table: $db.prescriptions,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> investigationsRefs(
+    Expression<bool> Function($$InvestigationsTableFilterComposer f) f,
+  ) {
+    final $$InvestigationsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.investigations,
+      getReferencedColumn: (t) => t.patientId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InvestigationsTableFilterComposer(
+            $db: $db,
+            $table: $db.investigations,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -4282,6 +5630,31 @@ class $$PatientsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> investigationsRefs<T extends Object>(
+    Expression<T> Function($$InvestigationsTableAnnotationComposer a) f,
+  ) {
+    final $$InvestigationsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.investigations,
+      getReferencedColumn: (t) => t.patientId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$InvestigationsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.investigations,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> toothConditionsRefs<T extends Object>(
     Expression<T> Function($$ToothConditionsTableAnnotationComposer a) f,
   ) {
@@ -4326,6 +5699,7 @@ class $$PatientsTableTableManager
             bool treatmentsRefs,
             bool paymentsRefs,
             bool prescriptionsRefs,
+            bool investigationsRefs,
             bool toothConditionsRefs,
           })
         > {
@@ -4398,6 +5772,7 @@ class $$PatientsTableTableManager
                 treatmentsRefs = false,
                 paymentsRefs = false,
                 prescriptionsRefs = false,
+                investigationsRefs = false,
                 toothConditionsRefs = false,
               }) {
                 return PrefetchHooks(
@@ -4407,6 +5782,7 @@ class $$PatientsTableTableManager
                     if (treatmentsRefs) db.treatments,
                     if (paymentsRefs) db.payments,
                     if (prescriptionsRefs) db.prescriptions,
+                    if (investigationsRefs) db.investigations,
                     if (toothConditionsRefs) db.toothConditions,
                   ],
                   addJoins: null,
@@ -4492,6 +5868,26 @@ class $$PatientsTableTableManager
                           referencedColumn: 'patient_id',
                           typedResults: items,
                         ),
+                      if (investigationsRefs)
+                        await $_getPrefetchedDataByColumns<
+                          Patient,
+                          $PatientsTable,
+                          Investigation,
+                          $InvestigationsTable
+                        >(
+                          currentTable: table,
+                          referencedTable: $$PatientsTableReferences
+                              ._investigationsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$PatientsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).investigationsRefs,
+                          currentColumn: 'id',
+                          referencedColumn: 'patient_id',
+                          typedResults: items,
+                        ),
                       if (toothConditionsRefs)
                         await $_getPrefetchedDataByColumns<
                           Patient,
@@ -4537,6 +5933,7 @@ typedef $$PatientsTableProcessedTableManager =
         bool treatmentsRefs,
         bool paymentsRefs,
         bool prescriptionsRefs,
+        bool investigationsRefs,
         bool toothConditionsRefs,
       })
     >;
@@ -5331,6 +6728,9 @@ typedef $$PaymentsTableCreateCompanionBuilder = PaymentsCompanion Function({
   required int patientId,
   Value<int?> treatmentId,
   required double amount,
+  Value<double> discount,
+  Value<String> category,
+  Value<String?> notes,
   required DateTime date,
   required String method,
   Value<DateTime> createdAt,
@@ -5340,6 +6740,9 @@ typedef $$PaymentsTableUpdateCompanionBuilder = PaymentsCompanion Function({
   Value<int> patientId,
   Value<int?> treatmentId,
   Value<double> amount,
+  Value<double> discount,
+  Value<String> category,
+  Value<String?> notes,
   Value<DateTime> date,
   Value<String> method,
   Value<DateTime> createdAt,
@@ -5400,6 +6803,21 @@ class $$PaymentsTableFilterComposer
 
   ColumnFilters<double> get amount => $composableBuilder(
     column: $table.amount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get discount => $composableBuilder(
+    column: $table.discount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5484,6 +6902,21 @@ class $$PaymentsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get discount => $composableBuilder(
+    column: $table.discount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get date => $composableBuilder(
     column: $table.date,
     builder: (column) => ColumnOrderings(column),
@@ -5560,6 +6993,15 @@ class $$PaymentsTableAnnotationComposer
 
   GeneratedColumn<double> get amount =>
       $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  GeneratedColumn<double> get discount =>
+      $composableBuilder(column: $table.discount, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
 
   GeneratedColumn<DateTime> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
@@ -5649,6 +7091,9 @@ class $$PaymentsTableTableManager
                 Value<int> patientId = const Value.absent(),
                 Value<int?> treatmentId = const Value.absent(),
                 Value<double> amount = const Value.absent(),
+                Value<double> discount = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> method = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -5657,6 +7102,9 @@ class $$PaymentsTableTableManager
                 patientId: patientId,
                 treatmentId: treatmentId,
                 amount: amount,
+                discount: discount,
+                category: category,
+                notes: notes,
                 date: date,
                 method: method,
                 createdAt: createdAt,
@@ -5667,6 +7115,9 @@ class $$PaymentsTableTableManager
                 required int patientId,
                 Value<int?> treatmentId = const Value.absent(),
                 required double amount,
+                Value<double> discount = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
                 required DateTime date,
                 required String method,
                 Value<DateTime> createdAt = const Value.absent(),
@@ -5675,6 +7126,9 @@ class $$PaymentsTableTableManager
                 patientId: patientId,
                 treatmentId: treatmentId,
                 amount: amount,
+                discount: discount,
+                category: category,
+                notes: notes,
                 date: date,
                 method: method,
                 createdAt: createdAt,
@@ -5761,7 +7215,10 @@ typedef $$PrescriptionsTableCreateCompanionBuilder =
       required int patientId,
       required DateTime date,
       required String medicines,
+      Value<String> investigations,
       Value<String?> advice,
+      Value<DateTime?> nextVisitDate,
+      Value<String?> doctorName,
       Value<DateTime> createdAt,
     });
 typedef $$PrescriptionsTableUpdateCompanionBuilder =
@@ -5770,7 +7227,10 @@ typedef $$PrescriptionsTableUpdateCompanionBuilder =
       Value<int> patientId,
       Value<DateTime> date,
       Value<String> medicines,
+      Value<String> investigations,
       Value<String?> advice,
+      Value<DateTime?> nextVisitDate,
+      Value<String?> doctorName,
       Value<DateTime> createdAt,
     });
 
@@ -5824,8 +7284,23 @@ class $$PrescriptionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get investigations => $composableBuilder(
+    column: $table.investigations,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get advice => $composableBuilder(
     column: $table.advice,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get nextVisitDate => $composableBuilder(
+    column: $table.nextVisitDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get doctorName => $composableBuilder(
+    column: $table.doctorName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5882,8 +7357,23 @@ class $$PrescriptionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get investigations => $composableBuilder(
+    column: $table.investigations,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get advice => $composableBuilder(
     column: $table.advice,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get nextVisitDate => $composableBuilder(
+    column: $table.nextVisitDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get doctorName => $composableBuilder(
+    column: $table.doctorName,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5934,8 +7424,23 @@ class $$PrescriptionsTableAnnotationComposer
   GeneratedColumn<String> get medicines =>
       $composableBuilder(column: $table.medicines, builder: (column) => column);
 
+  GeneratedColumn<String> get investigations => $composableBuilder(
+    column: $table.investigations,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get advice =>
       $composableBuilder(column: $table.advice, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get nextVisitDate => $composableBuilder(
+    column: $table.nextVisitDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get doctorName => $composableBuilder(
+    column: $table.doctorName,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5996,14 +7501,20 @@ class $$PrescriptionsTableTableManager
                 Value<int> patientId = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> medicines = const Value.absent(),
+                Value<String> investigations = const Value.absent(),
                 Value<String?> advice = const Value.absent(),
+                Value<DateTime?> nextVisitDate = const Value.absent(),
+                Value<String?> doctorName = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => PrescriptionsCompanion(
                 id: id,
                 patientId: patientId,
                 date: date,
                 medicines: medicines,
+                investigations: investigations,
                 advice: advice,
+                nextVisitDate: nextVisitDate,
+                doctorName: doctorName,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -6012,14 +7523,20 @@ class $$PrescriptionsTableTableManager
                 required int patientId,
                 required DateTime date,
                 required String medicines,
+                Value<String> investigations = const Value.absent(),
                 Value<String?> advice = const Value.absent(),
+                Value<DateTime?> nextVisitDate = const Value.absent(),
+                Value<String?> doctorName = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => PrescriptionsCompanion.insert(
                 id: id,
                 patientId: patientId,
                 date: date,
                 medicines: medicines,
+                investigations: investigations,
                 advice: advice,
+                nextVisitDate: nextVisitDate,
+                doctorName: doctorName,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -6086,6 +7603,634 @@ typedef $$PrescriptionsTableProcessedTableManager =
       (Prescription, $$PrescriptionsTableReferences),
       Prescription,
       PrefetchHooks Function({bool patientId})
+    >;
+typedef $$InvestigationsTableCreateCompanionBuilder =
+    InvestigationsCompanion Function({
+      Value<int> id,
+      required int patientId,
+      required String testName,
+      Value<String?> toothNumber,
+      Value<String> status,
+      Value<String?> resultNotes,
+      Value<double> cost,
+      required DateTime date,
+      Value<DateTime> createdAt,
+    });
+typedef $$InvestigationsTableUpdateCompanionBuilder =
+    InvestigationsCompanion Function({
+      Value<int> id,
+      Value<int> patientId,
+      Value<String> testName,
+      Value<String?> toothNumber,
+      Value<String> status,
+      Value<String?> resultNotes,
+      Value<double> cost,
+      Value<DateTime> date,
+      Value<DateTime> createdAt,
+    });
+
+final class $$InvestigationsTableReferences
+    extends BaseReferences<_$AppDatabase, $InvestigationsTable, Investigation> {
+  $$InvestigationsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $PatientsTable _patientIdTable(_$AppDatabase db) =>
+      db.patients.createAlias('investigations__patient_id__patients__id');
+
+  $$PatientsTableProcessedTableManager get patientId {
+    final $_column = $_itemColumn<int>('patient_id')!;
+
+    final manager = $$PatientsTableTableManager(
+      $_db,
+      $_db.patients,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_patientIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$InvestigationsTableFilterComposer
+    extends Composer<_$AppDatabase, $InvestigationsTable> {
+  $$InvestigationsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get testName => $composableBuilder(
+    column: $table.testName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get toothNumber => $composableBuilder(
+    column: $table.toothNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get resultNotes => $composableBuilder(
+    column: $table.resultNotes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get cost => $composableBuilder(
+    column: $table.cost,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$PatientsTableFilterComposer get patientId {
+    final $$PatientsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.patientId,
+      referencedTable: $db.patients,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PatientsTableFilterComposer(
+            $db: $db,
+            $table: $db.patients,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InvestigationsTableOrderingComposer
+    extends Composer<_$AppDatabase, $InvestigationsTable> {
+  $$InvestigationsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get testName => $composableBuilder(
+    column: $table.testName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get toothNumber => $composableBuilder(
+    column: $table.toothNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get resultNotes => $composableBuilder(
+    column: $table.resultNotes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get cost => $composableBuilder(
+    column: $table.cost,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$PatientsTableOrderingComposer get patientId {
+    final $$PatientsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.patientId,
+      referencedTable: $db.patients,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PatientsTableOrderingComposer(
+            $db: $db,
+            $table: $db.patients,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InvestigationsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $InvestigationsTable> {
+  $$InvestigationsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get testName =>
+      $composableBuilder(column: $table.testName, builder: (column) => column);
+
+  GeneratedColumn<String> get toothNumber => $composableBuilder(
+    column: $table.toothNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get resultNotes => $composableBuilder(
+    column: $table.resultNotes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get cost =>
+      $composableBuilder(column: $table.cost, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$PatientsTableAnnotationComposer get patientId {
+    final $$PatientsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.patientId,
+      referencedTable: $db.patients,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PatientsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.patients,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$InvestigationsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $InvestigationsTable,
+          Investigation,
+          $$InvestigationsTableFilterComposer,
+          $$InvestigationsTableOrderingComposer,
+          $$InvestigationsTableAnnotationComposer,
+          $$InvestigationsTableCreateCompanionBuilder,
+          $$InvestigationsTableUpdateCompanionBuilder,
+          (Investigation, $$InvestigationsTableReferences),
+          Investigation,
+          PrefetchHooks Function({bool patientId})
+        > {
+  $$InvestigationsTableTableManager(
+    _$AppDatabase db,
+    $InvestigationsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$InvestigationsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$InvestigationsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$InvestigationsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> patientId = const Value.absent(),
+                Value<String> testName = const Value.absent(),
+                Value<String?> toothNumber = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> resultNotes = const Value.absent(),
+                Value<double> cost = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => InvestigationsCompanion(
+                id: id,
+                patientId: patientId,
+                testName: testName,
+                toothNumber: toothNumber,
+                status: status,
+                resultNotes: resultNotes,
+                cost: cost,
+                date: date,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int patientId,
+                required String testName,
+                Value<String?> toothNumber = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> resultNotes = const Value.absent(),
+                Value<double> cost = const Value.absent(),
+                required DateTime date,
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => InvestigationsCompanion.insert(
+                id: id,
+                patientId: patientId,
+                testName: testName,
+                toothNumber: toothNumber,
+                status: status,
+                resultNotes: resultNotes,
+                cost: cost,
+                date: date,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$InvestigationsTable, Investigation>(table),
+                  $$InvestigationsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({patientId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (patientId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.patientId,
+                        referencedTable: $$InvestigationsTableReferences
+                            ._patientIdTable(db),
+                        referencedColumn: $$InvestigationsTableReferences
+                            ._patientIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$InvestigationsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $InvestigationsTable,
+      Investigation,
+      $$InvestigationsTableFilterComposer,
+      $$InvestigationsTableOrderingComposer,
+      $$InvestigationsTableAnnotationComposer,
+      $$InvestigationsTableCreateCompanionBuilder,
+      $$InvestigationsTableUpdateCompanionBuilder,
+      (Investigation, $$InvestigationsTableReferences),
+      Investigation,
+      PrefetchHooks Function({bool patientId})
+    >;
+typedef $$ExpensesTableCreateCompanionBuilder = ExpensesCompanion Function({
+  Value<int> id,
+  required String title,
+  required String category,
+  required double amount,
+  required DateTime date,
+  Value<String?> notes,
+  Value<DateTime> createdAt,
+});
+typedef $$ExpensesTableUpdateCompanionBuilder = ExpensesCompanion Function({
+  Value<int> id,
+  Value<String> title,
+  Value<String> category,
+  Value<double> amount,
+  Value<DateTime> date,
+  Value<String?> notes,
+  Value<DateTime> createdAt,
+});
+
+class $$ExpensesTableFilterComposer
+    extends Composer<_$AppDatabase, $ExpensesTable> {
+  $$ExpensesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ExpensesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExpensesTable> {
+  $$ExpensesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get title => $composableBuilder(
+    column: $table.title,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+    column: $table.date,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get notes => $composableBuilder(
+    column: $table.notes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ExpensesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExpensesTable> {
+  $$ExpensesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get title =>
+      $composableBuilder(column: $table.title, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<double> get amount =>
+      $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<String> get notes =>
+      $composableBuilder(column: $table.notes, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ExpensesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExpensesTable,
+          Expense,
+          $$ExpensesTableFilterComposer,
+          $$ExpensesTableOrderingComposer,
+          $$ExpensesTableAnnotationComposer,
+          $$ExpensesTableCreateCompanionBuilder,
+          $$ExpensesTableUpdateCompanionBuilder,
+          (Expense, BaseReferences<_$AppDatabase, $ExpensesTable, Expense>),
+          Expense,
+          PrefetchHooks Function()
+        > {
+  $$ExpensesTableTableManager(_$AppDatabase db, $ExpensesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExpensesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ExpensesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ExpensesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> title = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<double> amount = const Value.absent(),
+                Value<DateTime> date = const Value.absent(),
+                Value<String?> notes = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ExpensesCompanion(
+                id: id,
+                title: title,
+                category: category,
+                amount: amount,
+                date: date,
+                notes: notes,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String title,
+                required String category,
+                required double amount,
+                required DateTime date,
+                Value<String?> notes = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ExpensesCompanion.insert(
+                id: id,
+                title: title,
+                category: category,
+                amount: amount,
+                date: date,
+                notes: notes,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ExpensesTable, Expense>(table),
+                  BaseReferences<_$AppDatabase, $ExpensesTable, Expense>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ExpensesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExpensesTable,
+      Expense,
+      $$ExpensesTableFilterComposer,
+      $$ExpensesTableOrderingComposer,
+      $$ExpensesTableAnnotationComposer,
+      $$ExpensesTableCreateCompanionBuilder,
+      $$ExpensesTableUpdateCompanionBuilder,
+      (Expense, BaseReferences<_$AppDatabase, $ExpensesTable, Expense>),
+      Expense,
+      PrefetchHooks Function()
     >;
 typedef $$ProcedurePricesTableCreateCompanionBuilder =
     ProcedurePricesCompanion Function({
@@ -6632,6 +8777,10 @@ class $AppDatabaseManager {
       $$PaymentsTableTableManager(_db, _db.payments);
   $$PrescriptionsTableTableManager get prescriptions =>
       $$PrescriptionsTableTableManager(_db, _db.prescriptions);
+  $$InvestigationsTableTableManager get investigations =>
+      $$InvestigationsTableTableManager(_db, _db.investigations);
+  $$ExpensesTableTableManager get expenses =>
+      $$ExpensesTableTableManager(_db, _db.expenses);
   $$ProcedurePricesTableTableManager get procedurePrices =>
       $$ProcedurePricesTableTableManager(_db, _db.procedurePrices);
   $$ToothConditionsTableTableManager get toothConditions =>
