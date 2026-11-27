@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -21,11 +22,27 @@ class DashboardScreen extends ConsumerWidget {
     final todayIncome = ref.watch(todayIncomeProvider);
     final monthlyIncome = ref.watch(monthlyIncomeProvider);
     final totalDues = ref.watch(totalDuesProvider);
+    final isOffline = ref.watch(clinicSettingsProvider).isOffline;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('ড্যাশবোর্ড'),
         centerTitle: true,
+        actions: [
+          if (isOffline)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ActionChip(
+                avatar: const Icon(Icons.cloud_off, size: 15, color: Colors.orangeAccent),
+                label: const Text('অফলাইন',
+                    style: TextStyle(fontSize: 11, color: Colors.white)),
+                backgroundColor: Colors.black26,
+                side: BorderSide.none,
+                visualDensity: VisualDensity.compact,
+                onPressed: () => context.go('/settings'),
+              ),
+            ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -99,14 +116,23 @@ class DashboardScreen extends ConsumerWidget {
                 data: (dues) {
                   final dueAmount = dues.toDouble();
                   final isOverdue = dueAmount > 0;
+                  final cardBg = isOverdue
+                      ? AppTheme.tintedBg(
+                          context, Colors.red.shade50, const Color(0xFF331818))
+                      : AppTheme.tintedBg(
+                          context, Colors.teal.shade50, const Color(0xFF142C29));
+                  final accent = isOverdue
+                      ? AppTheme.adaptiveColor(
+                          context, Colors.red.shade700, Colors.redAccent.shade100)
+                      : AppTheme.adaptiveColor(
+                          context, Colors.teal.shade700, Colors.tealAccent.shade200);
+
                   return Card(
-                    elevation: 3,
+                    elevation: 2,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    color: isOverdue
-                        ? Colors.red.shade50
-                        : Colors.teal.shade50,
+                    color: cardBg,
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
                       onTap: () => context.go('/accounts?tab=1'),
@@ -116,12 +142,10 @@ class DashboardScreen extends ConsumerWidget {
                         child: Row(
                           children: [
                             CircleAvatar(
-                              backgroundColor: isOverdue
-                                  ? Colors.red.shade100
-                                  : Colors.teal.shade100,
+                              backgroundColor: accent.withAlpha(35),
                               child: Icon(
                                 Icons.account_balance_wallet,
-                                color: isOverdue ? Colors.red : Colors.teal,
+                                color: accent,
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -129,12 +153,12 @@ class DashboardScreen extends ConsumerWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'মোট বাকি (বকেয়া তালিকা দেখতে ট্যাপ করুন)',
                                     style: TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
-                                      color: Colors.black54,
+                                      color: AppTheme.mutedText(context),
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -143,15 +167,14 @@ class DashboardScreen extends ConsumerWidget {
                                     style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.bold,
-                                      color: isOverdue
-                                          ? Colors.red
-                                          : Colors.teal,
+                                      color: accent,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const Icon(Icons.chevron_right, color: Colors.black45),
+                            Icon(Icons.chevron_right,
+                                color: AppTheme.mutedText(context)),
                           ],
                         ),
                       ),
@@ -257,7 +280,7 @@ class DashboardScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(icon, color: Colors.white70, size: 28),
+            Icon(icon, color: Colors.white.withAlpha(220), size: 28),
             const Spacer(),
             asyncValue.when(
               data: (val) => Text(
@@ -273,21 +296,21 @@ class DashboardScreen extends ConsumerWidget {
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.white70,
+                  color: Colors.white,
                 ),
               ),
               error: (e, _) => const Text(
                 '—',
-                style: TextStyle(fontSize: 22, color: Colors.white70),
+                style: TextStyle(fontSize: 22, color: Colors.white),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
+                color: Colors.white.withAlpha(235),
+                fontWeight: FontWeight.w600,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

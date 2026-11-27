@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../data/local/database.dart';
 
 class AppointmentFormScreen extends ConsumerStatefulWidget {
@@ -249,10 +250,20 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
 
               // Visit Fee Card
               Card(
-                color: Colors.teal.shade50.withAlpha(110),
+                color: AppTheme.tintedBg(
+                  context,
+                  Colors.teal.shade50.withAlpha(110),
+                  const Color(0xFF142D2A),
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.teal.shade200),
+                  side: BorderSide(
+                    color: AppTheme.adaptiveColor(
+                      context,
+                      Colors.teal.shade200,
+                      Colors.teal.withAlpha(80),
+                    ),
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -300,8 +311,6 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
                             labelText: 'ভিজিট ফি (৳)',
-                            filled: true,
-                            fillColor: Colors.white,
                             isDense: true,
                           ),
                         ),
@@ -317,8 +326,6 @@ class _AppointmentFormScreenState extends ConsumerState<AppointmentFormScreen> {
                             value: _paymentMethod,
                             decoration: const InputDecoration(
                               labelText: 'পেমেন্ট মাধ্যম',
-                              filled: true,
-                              fillColor: Colors.white,
                               isDense: true,
                             ),
                             items: AppConstants.paymentMethods

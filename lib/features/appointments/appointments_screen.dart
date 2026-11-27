@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../core/utils/whatsapp_helper.dart';
 import '../../data/local/database.dart';
 
@@ -41,7 +42,7 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
   @override
   Widget build(BuildContext context) {
     final appointmentsAsync =
-        ref.watch(appointmentsForDateProvider(_selectedDate));
+        ref.watch(appointmentsWithPatientForDateProvider(_selectedDate));
 
     return Scaffold(
       appBar: AppBar(
@@ -63,12 +64,20 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
           // Date Selector Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.teal.shade50,
+            color: AppTheme.tintedBg(
+              context,
+              Colors.teal.shade50,
+              const Color(0xFF132C29),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.chevron_left, color: Colors.teal),
+                  icon: Icon(
+                    Icons.chevron_left,
+                    color: AppTheme.adaptiveColor(
+                        context, Colors.teal, Colors.tealAccent.shade200),
+                  ),
                   onPressed: () => _changeDate(-1),
                   tooltip: 'আগের দিন',
                 ),
@@ -80,15 +89,20 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Row(
                       children: [
-                        const Icon(Icons.calendar_today,
-                            size: 18, color: Colors.teal),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 18,
+                          color: AppTheme.adaptiveColor(
+                              context, Colors.teal, Colors.tealAccent.shade200),
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           _dateFormat.format(_selectedDate),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.teal,
+                            color: AppTheme.adaptiveColor(context,
+                                Colors.teal.shade800, Colors.tealAccent.shade100),
                           ),
                         ),
                       ],
@@ -96,7 +110,11 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right, color: Colors.teal),
+                  icon: Icon(
+                    Icons.chevron_right,
+                    color: AppTheme.adaptiveColor(
+                        context, Colors.teal, Colors.tealAccent.shade200),
+                  ),
                   onPressed: () => _changeDate(1),
                   tooltip: 'পরের দিন',
                 ),
@@ -136,9 +154,10 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
                   itemCount: appointments.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
-                    final appt = appointments[index];
+                    final item = appointments[index];
                     return _AppointmentCard(
-                      appointment: appt,
+                      appointment: item.appointment,
+                      patient: item.patient,
                       timeFormat: _timeFormat,
                     );
                   },
@@ -161,10 +180,12 @@ class _AppointmentsScreenState extends ConsumerState<AppointmentsScreen> {
 
 class _AppointmentCard extends ConsumerWidget {
   final Appointment appointment;
+  final Patient patient;
   final DateFormat timeFormat;
 
   const _AppointmentCard({
     required this.appointment,
+    required this.patient,
     required this.timeFormat,
   });
 
@@ -186,13 +207,10 @@ class _AppointmentCard extends ConsumerWidget {
         statusText = 'অপেক্ষমাণ';
     }
 
-    return FutureBuilder<Patient>(
-      future: ref.read(databaseProvider).getPatient(appointment.patientId),
-      builder: (context, snapshot) {
-        final patientName = snapshot.data?.name ?? 'লোড হচ্ছে...';
-        final patientPhone = snapshot.data?.phone ?? '';
+    final patientName = patient.name;
+    final patientPhone = patient.phone;
 
-        return Card(
+    return Card(
           elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -301,47 +319,43 @@ class _AppointmentCard extends ConsumerWidget {
                     ],
                   ],
                 ),
-                if (snapshot.hasData) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              context.push('/patients/${appointment.patientId}'),
-                          icon: const Icon(Icons.person_outline, size: 16),
-                          label: const Text('রোগী প্রোফাইল',
-                              style: TextStyle(fontSize: 12)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            context.push('/patients/${appointment.patientId}'),
+                        icon: const Icon(Icons.person_outline, size: 16),
+                        label: const Text('রোগী প্রোফাইল',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => context.push(
+                            '/patients/${appointment.patientId}/payments/add'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          foregroundColor: Colors.white,
                         ),
+                        icon: const Icon(Icons.payments_outlined, size: 16),
+                        label: const Text('ফি / পেমেন্ট',
+                            style: TextStyle(fontSize: 12)),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => context.push(
-                              '/patients/${appointment.patientId}/payments/add'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal,
-                            foregroundColor: Colors.white,
-                          ),
-                          icon: const Icon(Icons.payments_outlined, size: 16),
-                          label: const Text('ফি / পেমেন্ট',
-                              style: TextStyle(fontSize: 12)),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      IconButton.filledTonal(
-                        tooltip: 'কল',
-                        onPressed: () => WhatsAppHelper.callPhone(patientPhone),
-                        icon: const Icon(Icons.call, size: 18),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton.filledTonal(
+                      tooltip: 'কল',
+                      onPressed: () => WhatsAppHelper.callPhone(patientPhone),
+                      icon: const Icon(Icons.call, size: 18),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         );
-      },
-    );
   }
 }

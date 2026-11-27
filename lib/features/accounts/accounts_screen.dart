@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../core/utils/whatsapp_helper.dart';
 import '../../data/local/database.dart';
 import '../../data/models/clinic_models.dart';
@@ -348,25 +349,35 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen>
 
               if (discount > 0) ...[
                 const SizedBox(height: 10),
-                Card(
-                  color: Colors.orange.shade50,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.discount_outlined,
-                        color: Colors.deepOrange),
-                    title: const Text('মোট ডিসকাউন্ট দেওয়া হয়েছে'),
-                    trailing: Text(
-                      '৳${_currencyFormat.format(discount)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepOrange,
+                Builder(builder: (context) {
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  return Card(
+                    color: isDark
+                        ? Colors.orange.withAlpha(35)
+                        : Colors.orange.shade50,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: Icon(Icons.discount_outlined,
+                          color: isDark
+                              ? Colors.orangeAccent
+                              : Colors.deepOrange),
+                      title: const Text('মোট ডিসকাউন্ট দেওয়া হয়েছে'),
+                      trailing: Text(
+                        '৳${_currencyFormat.format(discount)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isDark
+                              ? Colors.orangeAccent
+                              : Colors.deepOrange,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ],
 
               if (byCategory.isNotEmpty) ...[
@@ -713,6 +724,11 @@ class _SummaryBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppTheme.isDark(context);
+    final effectiveColor = isDark
+        ? Color.lerp(color, Colors.white, 0.35)!
+        : color;
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -723,12 +739,15 @@ class _SummaryBox extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, size: 16, color: color),
+                Icon(icon, size: 16, color: effectiveColor),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.mutedText(context),
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -740,7 +759,7 @@ class _SummaryBox extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: color,
+                color: effectiveColor,
               ),
             ),
           ],

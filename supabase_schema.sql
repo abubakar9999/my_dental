@@ -22,9 +22,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     password TEXT NOT NULL DEFAULT '123456',
     qualification TEXT DEFAULT 'BDS, Dental Surgeon',
     is_active BOOLEAN NOT NULL DEFAULT true,
+    is_offline BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_offline BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_phone ON public.profiles(phone);

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:drift/drift.dart' as drift;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +10,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../data/local/database.dart';
+import '../../data/remote/online_data_exporter.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -124,57 +125,104 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _exportBackup(BuildContext context) async {
-    try {
-      final dbFolder = await getApplicationDocumentsDirectory();
-      final dbPath = p.join(dbFolder.path, 'my_dental.sqlite');
-      final dbFile = File(dbPath);
+  Future<void> _showExportDialog(BuildContext context, WidgetRef ref) async {
+    final format = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'অনলাইন টেবিল ফরম্যাটে ডাটা এক্সপোর্ট',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'এক্সপোর্ট করা ফাইল পরবর্তীতে সরাসরি অনলাইন Supabase টেবিলে ইমপোর্ট করা যাবে।',
+                style: TextStyle(fontSize: 12, color: AppTheme.mutedText(ctx)),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Colors.teal,
+                  child: Icon(Icons.storage, color: Colors.white),
+                ),
+                title: const Text('SQL ফাইল (.sql) — রেকমেন্ডেড'),
+                subtitle: const Text(
+                  'Supabase SQL Editor-এ পেস্ট/রান করে সব টেবিলে সরাসরি ইমপোর্ট করুন',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onTap: () => Navigator.pop(ctx, 'sql'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.indigo.shade600,
+                  child: const Icon(Icons.data_object, color: Colors.white),
+                ),
+                title: const Text('JSON ফাইল (.json)'),
+                subtitle: const Text(
+                  'অনলাইন টেবিল ও কলামের নাম অনুযায়ী স্ট্রাকচার্ড JSON এক্সপোর্ট',
+                  style: TextStyle(fontSize: 12),
+                ),
+                onTap: () => Navigator.pop(ctx, 'json'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
 
-      if (await dbFile.exists()) {
-        await Share.shareXFiles(
-          [XFile(dbPath)],
-          text: 'My Dental App Backup (${DateFormat('yyyy-MM-dd').format(DateTime.now())})',
-        );
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ডেটাবেস ফাইল পাওয়া যায়নি')),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ব্যাকআপ ত্রুটি: $e')),
-        );
-      }
-    }
+    if (format == null || !context.mounted) return;
+    await _exportOnlineFormat(context, ref, format: format);
   }
 
-  Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
+  Future<void> _exportOnlineFormat(
+    BuildContext context,
+    WidgetRef ref, {
+    required String format,
+  }) async {
     try {
-      final result = await FilePicker.platform.pickFiles();
-      if (result != null && result.files.single.path != null) {
-        final pickedFile = File(result.files.single.path!);
-        final dbFolder = await getApplicationDocumentsDirectory();
-        final targetPath = p.join(dbFolder.path, 'my_dental.sqlite');
+      final db = ref.read(databaseProvider);
+      await db.checkpointWal();
+      final exporter = OnlineDataExporter(db);
 
-        // Copy over existing db
-        await pickedFile.copy(targetPath);
+      final timestamp = DateFormat('yyyy-MM-dd_HHmm').format(DateTime.now());
+      final ext = format == 'sql' ? 'sql' : 'json';
+      final fileName = 'my_dental_online_export_$timestamp.$ext';
 
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ব্যাকআপ সফলভাবে রিস্টোর হয়েছে! অ্যাপটি পুনরায় চালু করুন।'),
-              backgroundColor: Colors.teal,
-            ),
-          );
-        }
+      final String content;
+      final int totalRecords;
+      if (format == 'sql') {
+        final res = await exporter.generateSql();
+        content = res.sql;
+        totalRecords = res.totalRecords;
+      } else {
+        final res = await exporter.generateJson();
+        content = res.json;
+        totalRecords = res.totalRecords;
       }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File(p.join(dir.path, fileName));
+      await file.writeAsString(content);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'My Dental Online-Format Export ($totalRecords টি রেকর্ড • .$ext)',
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('রিস্টোর ত্রুটি: $e')),
+          SnackBar(content: Text('এক্সপোর্ট ত্রুটি: $e')),
         );
       }
     }
@@ -294,6 +342,9 @@ class SettingsScreen extends ConsumerWidget {
     final proceduresAsync = ref.watch(procedurePricesProvider);
     final authRepo = ref.watch(authRepositoryProvider);
     final clinicSettings = ref.watch(clinicSettingsProvider);
+    final pendingSyncAsync = clinicSettings.onlineSyncEnabled
+        ? ref.watch(pendingSyncCountProvider)
+        : const AsyncValue<int>.data(0);
     final profile = authRepo.currentProfile;
 
     return Scaffold(
@@ -368,29 +419,143 @@ class SettingsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 19),
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.only(left: 6),
+                        tooltip: 'প্রোফাইল স্ট্যাটাস রিফ্রেশ',
+                        onPressed: () async {
+                          final ok = await ref
+                              .read(authRepositoryProvider)
+                              .syncProfileFromCloud();
+                          final syncOn = ref
+                              .read(clinicSettingsProvider)
+                              .onlineSyncEnabled;
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  ok
+                                      ? (syncOn
+                                          ? 'প্রোফাইল আপডেট হয়েছে: অনলাইন সিঙ্ক চালু'
+                                          : 'প্রোফাইল আপডেট হয়েছে: অ্যাপ সম্পূর্ণ অফলাইন মোডে চলবে')
+                                      : 'প্রোফাইল রিফ্রেশ করা যায়নি (ইন্টারনেট নেই)',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
                     ],
                   ),
-                  const Divider(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.teal.shade50.withAlpha(120),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  if (!clinicSettings.onlineSyncEnabled) ...[
+                    const Divider(height: 20),
+                    Row(
                       children: [
-                        const Icon(Icons.cloud_done_outlined, size: 18, color: Colors.teal),
+                        Icon(
+                          Icons.cloud_off,
+                          size: 18,
+                          color: AppTheme.adaptiveColor(context,
+                              Colors.orange.shade800, Colors.orangeAccent),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Supabase টেবিল ভিত্তিক সিস্টেম (${AppConstants.supabaseUrl})।',
-                            style: const TextStyle(fontSize: 12, color: Colors.black87),
+                            'অ্যাপ সম্পূর্ণ অফলাইন মোডে চলছে — সকল ডাটা শুধুমাত্র লোকাল স্টোরেজে সংরক্ষিত হচ্ছে।',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.mutedText(context),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
+                  if (clinicSettings.onlineSyncEnabled) ...[
+                    const Divider(height: 24),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        Icons.cloud_done_outlined,
+                        color: AppTheme.adaptiveColor(
+                            context, Colors.teal, Colors.tealAccent.shade200),
+                      ),
+                      title: const Text(
+                        'অনলাইন সিঙ্ক চালু (প্রোফাইল থেকে নির্ধারিত)',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: const Text(
+                        'লোকাল স্টোরেজের পাশাপাশি অনলাইন Supabase টেবিলেও ডাটা সিঙ্ক হবে',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'সিঙ্ক সক্রিয়',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.adaptiveColor(context,
+                                Colors.teal.shade800, Colors.tealAccent),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        pendingSyncAsync.when(
+                          data: (count) => Text(
+                            'অপেক্ষমাণ সিঙ্ক: $count টি রেকর্ড',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.mutedText(context),
+                            ),
+                          ),
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, _) => const SizedBox.shrink(),
+                        ),
+                        TextButton.icon(
+                          onPressed: () async {
+                            await ref
+                                .read(authRepositoryProvider)
+                                .syncProfileFromCloud();
+                            final stillEnabled = ref
+                                .read(clinicSettingsProvider)
+                                .onlineSyncEnabled;
+                            final synced = stillEnabled
+                                ? await ref
+                                    .read(supabaseSyncProvider)
+                                    .flushQueue()
+                                : 0;
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    !stillEnabled
+                                        ? 'প্রোফাইলে অনলাইন সিঙ্ক বন্ধ থাকায় ডাটা লোকালেই থাকবে'
+                                        : (synced > 0
+                                            ? '$synced টি রেকর্ড Supabase-এ সিঙ্ক হয়েছে'
+                                            : 'সব ডাটা অনলাইনে সিঙ্ককৃত আছে'),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.sync, size: 17),
+                          label: const Text('এখনই অনলাইনে সিঙ্ক',
+                              style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -513,9 +678,9 @@ class SettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
-          // ─── Section 3: Backup & Restore ───────────────────────
+          // ─── Section 3: Online-Compatible Export ────────────────
           Text(
-            'ব্যাকআপ ও রিস্টোর',
+            'ডাটা এক্সপোর্ট',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Colors.teal,
@@ -526,30 +691,17 @@ class SettingsScreen extends ConsumerWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Colors.teal,
-                    child: Icon(Icons.upload_file, color: Colors.white),
-                  ),
-                  title: const Text('ডেটাবেস এক্সপোর্ট (ব্যাকআপ)'),
-                  subtitle: const Text('ফোনে ফাইল সেভ বা হোয়াটসঅ্যাপে শেয়ার করুন'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _exportBackup(context),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blue.shade600,
-                    child: const Icon(Icons.download, color: Colors.white),
-                  ),
-                  title: const Text('ডেটাবেস ইমপোর্ট (রিস্টোর)'),
-                  subtitle: const Text('আগের ব্যাকআপ ফাইল থেকে ডেটা ফিরিয়ে আনুন'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _importBackup(context, ref),
-                ),
-              ],
+            child: ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.teal,
+                child: Icon(Icons.upload_file, color: Colors.white),
+              ),
+              title: const Text('অফলাইন ডাটা এক্সপোর্ট (অনলাইন ফরম্যাট)'),
+              subtitle: const Text(
+                'ভবিষ্যতে অনলাইন Supabase টেবিলে ইমপোর্ট করার জন্য .sql / .json ফাইল তৈরি ও শেয়ার করুন',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _showExportDialog(context, ref),
             ),
           ),
 

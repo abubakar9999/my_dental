@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart' show Value;
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +10,8 @@ import 'package:my_dental/core/constants.dart';
 import 'package:my_dental/core/providers.dart';
 import 'package:my_dental/core/utils/whatsapp_helper.dart';
 import 'package:my_dental/data/auth/auth_repository.dart';
+import 'package:my_dental/data/local/database.dart';
+import 'package:my_dental/data/remote/online_data_exporter.dart';
 import 'package:my_dental/features/auth/login_screen.dart';
 import 'package:my_dental/features/dental_chart/models/dental_data.dart';
 import 'package:my_dental/features/prescriptions/prescription_pdf.dart';
@@ -122,5 +128,89 @@ void main() {
     expect(reloaded.firstVisitFee, 1200.0);
     expect(reloaded.followUpFee, 500.0);
     expect(reloaded.clinicName, 'Smile Care Dental');
+    expect(reloaded.onlineSyncEnabled, false);
+    expect(reloaded.isOffline, true);
+
+    await reloaded.setOnlineSyncEnabled(true);
+    expect(ClinicSettingsNotifier(prefs).onlineSyncEnabled, true);
+    expect(ClinicSettingsNotifier(prefs).isOffline, false);
+  });
+
+  test('OnlineDataExporter exports SQL and JSON matching online Supabase tables', () async {
+    final db = AppDatabase.forTesting(
+      NativeDatabase.memory(),
+      isOfflineCheck: () => true,
+    );
+
+    final patientId = await db.insertPatient(
+      PatientsCompanion.insert(
+        name: "O'Connor করিম",
+        phone: '01711223344',
+        age: const Value(32),
+      ),
+    );
+    await db.insertTreatment(
+      TreatmentsCompanion.insert(
+        patientId: patientId,
+        procedure: 'ফিলিং (Filling)',
+        cost: const Value(1500.0),
+        date: DateTime.utc(2026, 11, 27, 9, 0),
+        toothNumber: const Value('16'),
+      ),
+    );
+    await db.insertPayment(
+      PaymentsCompanion.insert(
+        patientId: patientId,
+        amount: 1000.0,
+        discount: const Value(200.0),
+        date: DateTime.utc(2026, 11, 27, 9, 30),
+        method: 'নগদ (Cash)',
+      ),
+    );
+    await db.insertPrescription(
+      PrescriptionsCompanion.insert(
+        patientId: patientId,
+        date: DateTime.utc(2026, 11, 27, 10, 0),
+        medicines: jsonEncode([
+          {'name': 'Tab. Napa', 'dose': '1+0+1'},
+        ]),
+        investigations: Value(jsonEncode([
+          {'name': 'IOPA X-Ray', 'toothNumber': '16'},
+        ])),
+      ),
+    );
+    await db.setToothCondition(
+      patientId: patientId,
+      toothNumber: '16',
+      condition: 'filled',
+      surfaces: jsonEncode(['occlusal']),
+    );
+
+    // Offline writes must NOT populate syncQueue
+    expect((await db.getPendingSyncItems()).isEmpty, true);
+
+    final exporter = OnlineDataExporter(db);
+    final sqlResult = await exporter.generateSql();
+    expect(sqlResult.totalRecords, 5);
+    expect(sqlResult.sql.contains('BEGIN;'), true);
+    expect(sqlResult.sql.contains("INSERT INTO public.patients"), true);
+    expect(sqlResult.sql.contains("'O''Connor করিম'"), true);
+    expect(sqlResult.sql.contains('ON CONFLICT (id) DO UPDATE'), true);
+    expect(sqlResult.sql.contains('::jsonb'), true);
+    expect(sqlResult.sql.contains('ON CONFLICT (patient_id, tooth_number) DO UPDATE'), true);
+    expect(sqlResult.sql.contains("pg_get_serial_sequence('public.patients', 'id')"), true);
+    expect(sqlResult.sql.contains('COMMIT;'), true);
+
+    final jsonResult = await exporter.generateJson();
+    expect(jsonResult.totalRecords, 5);
+    final decoded = jsonDecode(jsonResult.json) as Map<String, dynamic>;
+    final tables = decoded['tables'] as Map<String, dynamic>;
+    expect((tables['patients'] as List).length, 1);
+    expect((tables['treatments'] as List).first['tooth_number'], '16');
+    expect((tables['payments'] as List).first['discount'], 200.0);
+    expect((tables['prescriptions'] as List).first['medicines'], isA<List>());
+    expect((tables['tooth_conditions'] as List).first['surfaces'], ['occlusal']);
+
+    await db.close();
   });
 }

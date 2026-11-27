@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/constants.dart';
 import '../local/database.dart' as local;
 
 class ClinicProfile {
@@ -12,6 +13,7 @@ class ClinicProfile {
   final String? email;
   final String? phone;
   final String? qualification;
+  final bool isOffline;
 
   const ClinicProfile({
     this.id,
@@ -20,6 +22,7 @@ class ClinicProfile {
     this.email,
     this.phone,
     this.qualification,
+    this.isOffline = false,
   });
 
   factory ClinicProfile.fromJson(Map<String, dynamic> json) {
@@ -30,6 +33,7 @@ class ClinicProfile {
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       qualification: json['qualification'] as String?,
+      isOffline: (json['is_offline'] as bool?) ?? false,
     );
   }
 
@@ -50,6 +54,7 @@ class ClinicProfile {
         'email': email,
         'phone': phone,
         'qualification': qualification,
+        'is_offline': isOffline,
       };
 }
 
@@ -59,6 +64,8 @@ class AuthRepository extends ChangeNotifier {
   final local.AppDatabase? db;
   final SupabaseClient? supabase;
   final SharedPreferences? prefs;
+  final bool Function()? isOfflineCheck;
+  final Future<void> Function(bool)? onCloudOfflineChanged;
 
   ClinicProfile? _currentProfile;
   String? _lastError;
@@ -68,6 +75,8 @@ class AuthRepository extends ChangeNotifier {
     this.db,
     this.supabase,
     this.prefs,
+    this.isOfflineCheck,
+    this.onCloudOfflineChanged,
   }) {
     _loadSavedSession();
   }
@@ -126,8 +135,31 @@ class AuthRepository extends ChangeNotifier {
     return variants.toList();
   }
 
-  /// Signs in using either Phone number OR Email along with Password
-  /// against the Supabase `profiles` table (with local SQLite offline fallback).
+  Future<SupabaseClient?> _ensureSupabaseClient() async {
+    if (supabase != null) return supabase;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      try {
+        await Supabase.initialize(
+          url: AppConstants.supabaseUrl,
+          anonKey: AppConstants.supabaseAnonKey,
+          authOptions: const FlutterAuthClientOptions(
+            autoRefreshToken: false,
+          ),
+        );
+        return Supabase.instance.client;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  /// Signs in using either Phone number OR Email along with Password.
+  /// Local-First to minimize Supabase API hits & cost:
+  /// 1) Checks local SQLite cache first (0 network hits for returning users).
+  /// 2) Falls back to a single combined `.or()` query on Supabase `public.profiles`
+  ///    only when the account is not cached locally yet.
   Future<bool> signIn({
     required String identifier,
     required String password,
@@ -136,46 +168,42 @@ class AuthRepository extends ChangeNotifier {
     final cleanId = identifier.trim();
     if (cleanId.isEmpty || password.isEmpty) return false;
 
-    // 1. Table-based lookup on Supabase `public.profiles`
-    if (supabase != null) {
-      try {
-        Map<String, dynamic>? row;
-        if (cleanId.contains('@')) {
-          row = await supabase!
-              .from('profiles')
-              .select()
-              .ilike('email', cleanId)
-              .limit(1)
-              .maybeSingle();
-        } else {
-          final phones = _phoneVariants(cleanId);
-          row = await supabase!
-              .from('profiles')
-              .select()
-              .inFilter('phone', phones)
-              .limit(1)
-              .maybeSingle();
+    local.User? localUser;
+    if (db != null) {
+      localUser = await db!.authenticateUser(cleanId, password);
+    }
 
-          // Fallback in case identifier without '@' was stored in email
-          row ??= await supabase!
-              .from('profiles')
-              .select()
-              .ilike('email', cleanId)
-              .limit(1)
-              .maybeSingle();
-        }
+    // 1. Check Supabase `public.profiles` (1 hit on explicit login so `is_offline`
+    //    and `is_active` always stay in sync with cloud profile settings).
+    final client = await _ensureSupabaseClient();
+    if (client != null) {
+      try {
+        final escaped = cleanId.replaceAll('"', '\\"');
+        final filter = cleanId.contains('@')
+            ? 'email.ilike."$escaped"'
+            : 'phone.in.(${_phoneVariants(cleanId).map((p) => '"$p"').join(',')}),email.ilike."$escaped"';
+
+        final query = client
+            .from('profiles')
+            .select()
+            .or(filter)
+            .limit(1)
+            .maybeSingle();
+
+        final row = localUser != null
+            ? await query.timeout(const Duration(seconds: 3))
+            : await query;
 
         if (row != null) {
           final isActive = (row['is_active'] as bool?) ?? true;
           final storedPassword = row['password'] as String?;
 
-          if (storedPassword == null) {
-            debugPrint('Supabase profiles table has no password column yet.');
-          } else if (isActive && storedPassword == password) {
+          if (isActive && storedPassword == password) {
             final profile = ClinicProfile.fromJson(row);
             await _setLoggedInProfile(profile);
+            await onCloudOfflineChanged?.call(profile.isOffline);
 
-            // Sync user locally so subsequent offline logins also work
+            // Cache locally so future offline logins work seamlessly
             await db?.upsertSyncedUser(
               name: profile.fullName,
               email: profile.email,
@@ -184,19 +212,8 @@ class AuthRepository extends ChangeNotifier {
               role: profile.role,
             );
             return true;
-          } else {
-            return false;
           }
-        } else {
-          // Check if profiles table has any rows at all; if it does, user doesn't exist
-          final anyProfile = await supabase!
-              .from('profiles')
-              .select('id')
-              .limit(1)
-              .maybeSingle();
-          if (anyProfile != null) {
-            return false;
-          }
+          return false;
         }
       } on PostgrestException catch (e) {
         debugPrint('Supabase Postgrest error (${e.code}): ${e.message}');
@@ -205,20 +222,53 @@ class AuthRepository extends ChangeNotifier {
               'Supabase-এ profiles টেবিলের permission দেওয়া নেই (SQL Editor-এ GRANT রান করুন)।';
         }
       } catch (e) {
-        debugPrint('Supabase table login error (falling back to offline DB): $e');
+        debugPrint('Supabase table login error (falling back to local if cached): $e');
       }
     }
 
-    // 2. Offline / Local SQLite fallback (`users` table)
-    if (db != null) {
-      final user = await db!.authenticateUser(cleanId, password);
-      if (user != null) {
-        _lastError = null;
-        await _setLoggedInProfile(ClinicProfile.fromLocalUser(user));
+    // 2. Local SQLite fallback (works fully offline if already cached)
+    if (localUser != null) {
+      final restored = ClinicProfile.fromLocalUser(localUser);
+      await _setLoggedInProfile(restored);
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Manual on-demand profile refresh from Supabase (1 slim query when user taps Refresh).
+  Future<bool> syncProfileFromCloud() async {
+    final profile = _currentProfile;
+    final client = await _ensureSupabaseClient();
+    if (client == null || profile == null) return false;
+
+    final lookup = (profile.phone?.isNotEmpty == true)
+        ? profile.phone!
+        : (profile.email ?? '');
+    if (lookup.isEmpty) return false;
+
+    try {
+      final safeId = lookup.replaceAll('"', '');
+      final filter = lookup.contains('@')
+          ? 'email.ilike."$safeId"'
+          : 'phone.in.(${_phoneVariants(lookup).map((p) => '"${p.replaceAll('"', '')}"').join(',')}),email.ilike."$safeId"';
+
+      final row = await client
+          .from('profiles')
+          .select()
+          .or(filter)
+          .limit(1)
+          .maybeSingle();
+
+      if (row != null && ((row['is_active'] as bool?) ?? true)) {
+        final profile = ClinicProfile.fromJson(row);
+        await _setLoggedInProfile(profile);
+        await onCloudOfflineChanged?.call(profile.isOffline);
         return true;
       }
+    } catch (e) {
+      debugPrint('Profile sync failed: $e');
     }
-
     return false;
   }
 
@@ -227,6 +277,7 @@ class AuthRepository extends ChangeNotifier {
     try {
       await prefs?.remove(_sessionKey);
     } catch (_) {}
+    await onCloudOfflineChanged?.call(false);
     _authStateController.add(false);
     notifyListeners();
   }

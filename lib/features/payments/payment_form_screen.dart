@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../data/local/database.dart';
 import 'billing_pdf.dart';
 
@@ -188,7 +189,11 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
             children: [
               // Patient Due Balance Summary Card
               Card(
-                color: Colors.teal.shade50,
+                color: AppTheme.tintedBg(
+                  context,
+                  Colors.teal.shade50,
+                  const Color(0xFF142D2A),
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -199,11 +204,19 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                       Row(
                         children: [
                           CircleAvatar(
-                            backgroundColor: Colors.teal.shade100,
+                            backgroundColor: AppTheme.tintedBg(
+                              context,
+                              Colors.teal.shade100,
+                              Colors.teal.withAlpha(50),
+                            ),
                             radius: 24,
                             child: Icon(
                               Icons.account_balance_wallet,
-                              color: Colors.teal.shade800,
+                              color: AppTheme.adaptiveColor(
+                                context,
+                                Colors.teal.shade800,
+                                Colors.tealAccent.shade200,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -211,11 +224,11 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'বর্তমান বাকি (Current Due)',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.black54,
+                                    color: AppTheme.mutedText(context),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -225,8 +238,10 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
                                     color: currentDue > 0
-                                        ? Colors.red
-                                        : Colors.green,
+                                        ? AppTheme.adaptiveColor(context,
+                                            Colors.red, Colors.redAccent.shade100)
+                                        : AppTheme.adaptiveColor(context,
+                                            Colors.green, Colors.greenAccent.shade200),
                                   ),
                                 ),
                               ],
@@ -246,14 +261,16 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                             'জমা: ৳${_currencyFormat.format(paid)}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.green.shade800,
+                              color: AppTheme.adaptiveColor(context,
+                                  Colors.green.shade800, Colors.greenAccent.shade200),
                             ),
                           ),
                           Text(
                             'ছাড়: ৳${_currencyFormat.format(prevDiscount)}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.orange.shade900,
+                              color: AppTheme.adaptiveColor(context,
+                                  Colors.orange.shade900, Colors.orangeAccent.shade200),
                             ),
                           ),
                         ],
@@ -356,23 +373,38 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50.withAlpha(110),
+                  color: AppTheme.tintedBg(
+                    context,
+                    Colors.orange.shade50.withAlpha(110),
+                    Colors.orange.withAlpha(28),
+                  ),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.shade200),
+                  border: Border.all(
+                    color: AppTheme.adaptiveColor(
+                      context,
+                      Colors.orange.shade200,
+                      Colors.orange.withAlpha(90),
+                    ),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.discount_outlined,
-                            size: 18, color: Colors.deepOrange),
-                        SizedBox(width: 6),
+                        Icon(
+                          Icons.discount_outlined,
+                          size: 18,
+                          color: AppTheme.adaptiveColor(context,
+                              Colors.deepOrange, Colors.orangeAccent.shade200),
+                        ),
+                        const SizedBox(width: 6),
                         Text(
                           'ডিসকাউন্ট / ছাড় (Discount Process)',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: Colors.deepOrange,
+                            color: AppTheme.adaptiveColor(context,
+                                Colors.deepOrange, Colors.orangeAccent.shade200),
                           ),
                         ),
                       ],
@@ -384,7 +416,6 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                         return ActionChip(
                           label: Text('$pct% ছাড়',
                               style: const TextStyle(fontSize: 11)),
-                          backgroundColor: Colors.white,
                           onPressed: () =>
                               _applyPercentageDiscount(pct, currentDue),
                         );
@@ -399,8 +430,6 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                       onChanged: (_) => setState(() {}),
                       decoration: const InputDecoration(
                         labelText: 'ডিসকাউন্ট পরিমাণ (৳)',
-                        filled: true,
-                        fillColor: Colors.white,
                         isDense: true,
                       ),
                       validator: (val) {
@@ -422,7 +451,11 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blueGrey.shade50,
+                  color: AppTheme.tintedBg(
+                    context,
+                    Colors.blueGrey.shade50,
+                    const Color(0xFF1A2828),
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -438,7 +471,11 @@ class _PaymentFormScreenState extends ConsumerState<PaymentFormScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
-                        color: projectedDue > 0 ? Colors.red : Colors.teal,
+                        color: projectedDue > 0
+                            ? AppTheme.adaptiveColor(
+                                context, Colors.red, Colors.redAccent.shade100)
+                            : AppTheme.adaptiveColor(context, Colors.teal,
+                                Colors.tealAccent.shade200),
                       ),
                     ),
                   ],

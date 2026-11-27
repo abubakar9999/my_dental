@@ -122,3 +122,13 @@ class ToothConditions extends Table {
   DateTimeColumn get updatedAt =>
       dateTime().withDefault(currentDateAndTime)();
 }
+
+class SyncQueue extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get targetTable => text()();
+  TextColumn get recordKey => text()();
+  TextColumn get operation => text()(); // upsert, delete
+  TextColumn get payload => text()(); // JSON map
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+}

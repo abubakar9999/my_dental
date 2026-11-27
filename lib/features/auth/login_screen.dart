@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -70,8 +71,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final titleColor = AppTheme.adaptiveColor(
+        context, Colors.teal.shade800, Colors.tealAccent.shade200);
+    final subtitleColor = AppTheme.adaptiveColor(
+        context, Colors.teal.shade700, Colors.tealAccent.shade100);
+    final infoTextColor = AppTheme.adaptiveColor(
+        context, Colors.teal.shade900, Colors.teal.shade100);
+
     return Scaffold(
-      backgroundColor: Colors.teal.shade50,
+      backgroundColor: AppTheme.tintedBg(
+          context, Colors.teal.shade50, const Color(0xFF0E1717)),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
@@ -119,7 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Colors.teal.shade800,
+                  color: titleColor,
                 ),
               ),
 
@@ -129,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 'ফোন নম্বর বা ইমেইল দিয়ে লগইন করুন',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.teal.shade700,
+                  color: subtitleColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -250,9 +259,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.teal.shade100.withAlpha(90),
+                  color: AppTheme.tintedBg(
+                    context,
+                    Colors.teal.shade100.withAlpha(90),
+                    const Color(0xFF142D2A),
+                  ),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.teal.shade200),
+                  border: Border.all(
+                    color: AppTheme.adaptiveColor(
+                      context,
+                      Colors.teal.shade200,
+                      Colors.teal.withAlpha(80),
+                    ),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -262,7 +281,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         Icon(
                           Icons.table_chart_outlined,
                           size: 18,
-                          color: Colors.teal.shade800,
+                          color: infoTextColor,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -270,7 +289,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: Colors.teal.shade900,
+                            color: infoTextColor,
                           ),
                         ),
                       ],
@@ -281,7 +300,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.teal.shade900,
+                        color: infoTextColor,
                         height: 1.35,
                       ),
                     ),

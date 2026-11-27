@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants.dart';
 import 'core/theme.dart';
 import 'core/providers.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Load environment variables from .env
+Future<void> _loadEnvSafely() async {
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
@@ -21,23 +17,25 @@ void main() async {
       debugPrint("Notice: .env file not found or failed to load: $e");
     }
   }
+}
 
-  // Initialize Supabase
+Future<SharedPreferences?> _loadPrefsSafely() async {
   try {
-    await Supabase.initialize(
-      url: AppConstants.supabaseUrl,
-      anonKey: AppConstants.supabaseAnonKey,
-    );
-  } catch (e) {
-    debugPrint("Notice: Supabase initialization error: $e");
-  }
-
-  SharedPreferences? prefs;
-  try {
-    prefs = await SharedPreferences.getInstance();
+    return await SharedPreferences.getInstance();
   } catch (e) {
     debugPrint("Notice: SharedPreferences error: $e");
+    return null;
   }
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final results = await Future.wait<dynamic>([
+    _loadEnvSafely(),
+    _loadPrefsSafely(),
+  ]);
+  final prefs = results[1] as SharedPreferences?;
 
   runApp(
     ProviderScope(
@@ -57,12 +55,17 @@ class MyDentalApp extends ConsumerStatefulWidget {
 }
 
 class _MyDentalAppState extends ConsumerState<MyDentalApp> {
+  static const _seedKey = 'procedures_seeded_v2';
+
   @override
   void initState() {
     super.initState();
-    // Seed default procedure prices and default user on first run
-    ref.read(databaseProvider).seedProcedurePrices();
-    ref.read(databaseProvider).seedDefaultUser();
+    final prefs = ref.read(sharedPreferencesProvider);
+    if (prefs?.getBool(_seedKey) != true) {
+      ref.read(databaseProvider).seedProcedurePrices().then((_) {
+        prefs?.setBool(_seedKey, true);
+      });
+    }
   }
 
   @override

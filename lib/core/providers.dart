@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import 'router.dart';
 import '../data/local/database.dart';
 import '../data/models/clinic_models.dart';
 import '../data/auth/auth_repository.dart';
+import '../data/remote/supabase_sync_service.dart';
 
 // ─── Clinic Settings (Visit Fees & Clinic Info) ───────────────
 
@@ -17,6 +19,7 @@ class ClinicSettingsNotifier extends ChangeNotifier {
   static const _keyFollowUp = 'clinic_follow_up_fee';
   static const _keyClinicName = 'clinic_name';
   static const _keyClinicPhone = 'clinic_phone';
+  static const _keyOnlineSyncEnabled = 'clinic_online_sync_enabled';
 
   final SharedPreferences? prefs;
   double firstVisitFee;
@@ -24,24 +27,44 @@ class ClinicSettingsNotifier extends ChangeNotifier {
   String clinicName;
   String clinicPhone;
 
+  /// Driven strictly by `public.profiles.is_offline` in Supabase:
+  /// - `false` (default): app runs 100% offline, no sync option shown, no Supabase writes.
+  /// - `true`: sync-to-online option appears in UI and local changes sync to Supabase.
+  bool onlineSyncEnabled;
+
   ClinicSettingsNotifier(this.prefs)
       : firstVisitFee =
             prefs?.getDouble(_keyFirstVisit) ?? AppConstants.defaultFirstVisitFee,
         followUpFee =
             prefs?.getDouble(_keyFollowUp) ?? AppConstants.defaultFollowUpFee,
         clinicName = prefs?.getString(_keyClinicName) ?? 'My Dental Clinic',
-        clinicPhone = prefs?.getString(_keyClinicPhone) ?? '+880 1700-000000';
+        clinicPhone = prefs?.getString(_keyClinicPhone) ?? '+880 1700-000000',
+        onlineSyncEnabled = prefs?.getBool(_keyOnlineSyncEnabled) ?? false;
+
+  /// True when the app should run strictly offline without touching Supabase.
+  bool get isOffline => !onlineSyncEnabled;
+
+  Future<void> setOnlineSyncEnabled(bool value) async {
+    onlineSyncEnabled = value;
+    await prefs?.setBool(_keyOnlineSyncEnabled, value);
+    notifyListeners();
+  }
 
   Future<void> update({
     required double newFirstVisitFee,
     required double newFollowUpFee,
     required String newClinicName,
     required String newClinicPhone,
+    bool? newOnlineSyncEnabled,
   }) async {
     firstVisitFee = newFirstVisitFee;
     followUpFee = newFollowUpFee;
     clinicName = newClinicName.trim().isEmpty ? 'My Dental Clinic' : newClinicName.trim();
     clinicPhone = newClinicPhone.trim();
+    if (newOnlineSyncEnabled != null) {
+      onlineSyncEnabled = newOnlineSyncEnabled;
+      await prefs?.setBool(_keyOnlineSyncEnabled, onlineSyncEnabled);
+    }
 
     await prefs?.setDouble(_keyFirstVisit, firstVisitFee);
     await prefs?.setDouble(_keyFollowUp, followUpFee);
@@ -62,9 +85,32 @@ final clinicSettingsProvider =
 final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) => null);
 
 final databaseProvider = Provider<AppDatabase>((ref) {
-  final db = AppDatabase();
+  final settings = ref.read(clinicSettingsProvider);
+  final db = AppDatabase(isOfflineCheck: () => settings.isOffline);
+  final syncService = SupabaseSyncService(
+    db: db,
+    isOfflineCheck: () => settings.isOffline,
+  );
+  db.onLocalMutation = () {
+    if (!settings.isOffline) {
+      unawaited(syncService.flushQueue());
+    }
+  };
   ref.onDispose(() => db.close());
   return db;
+});
+
+final supabaseSyncProvider = Provider<SupabaseSyncService>((ref) {
+  final db = ref.watch(databaseProvider);
+  final settings = ref.read(clinicSettingsProvider);
+  return SupabaseSyncService(
+    db: db,
+    isOfflineCheck: () => settings.isOffline,
+  );
+});
+
+final pendingSyncCountProvider = StreamProvider<int>((ref) {
+  return ref.watch(databaseProvider).watchPendingSyncCount();
 });
 
 // ─── Table-Based Auth (Supabase Profiles + Offline SQLite) ─────
@@ -72,11 +118,18 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 final authRepositoryProvider = ChangeNotifierProvider<AuthRepository>((ref) {
   final db = ref.watch(databaseProvider);
   final prefs = ref.watch(sharedPreferencesProvider);
+  final settings = ref.read(clinicSettingsProvider);
   SupabaseClient? client;
   try {
     client = Supabase.instance.client;
   } catch (_) {}
-  return AuthRepository(db: db, supabase: client, prefs: prefs);
+  return AuthRepository(
+    db: db,
+    supabase: client,
+    prefs: prefs,
+    isOfflineCheck: () => settings.isOffline,
+    onCloudOfflineChanged: (val) => settings.setOnlineSyncEnabled(val),
+  );
 });
 
 final authStateProvider = StreamProvider<bool>((ref) {
@@ -131,6 +184,11 @@ final patientProvider = FutureProvider.family<Patient, int>((ref, id) {
 final appointmentsForDateProvider =
     StreamProvider.family<List<Appointment>, DateTime>((ref, date) {
   return ref.watch(databaseProvider).watchAppointmentsForDate(date);
+});
+
+final appointmentsWithPatientForDateProvider =
+    StreamProvider.family<List<AppointmentWithPatient>, DateTime>((ref, date) {
+  return ref.watch(databaseProvider).watchAppointmentsWithPatientForDate(date);
 });
 
 final appointmentsForPatientProvider =

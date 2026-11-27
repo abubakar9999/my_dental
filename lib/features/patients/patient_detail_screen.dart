@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
 import '../../core/providers.dart';
+import '../../core/theme.dart';
 import '../../core/utils/whatsapp_helper.dart';
 import '../../data/local/database.dart';
 import '../dental_chart/dental_chart_view.dart';
@@ -255,7 +256,8 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                           children: [
                             Expanded(
                               child: Card(
-                                color: Colors.teal.shade50,
+                                color: AppTheme.tintedBg(
+                                    context, Colors.teal.shade50, const Color(0xFF142D2A)),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -264,15 +266,18 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text('মোট খরচ', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                      Text('মোট খরচ',
+                                          style: TextStyle(
+                                              fontSize: 12, color: AppTheme.mutedText(context))),
                                       const SizedBox(height: 4),
                                       totalCostFuture.when(
                                         data: (cost) => Text(
                                           '৳${_currencyFormat.format(cost)}',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.teal,
+                                            color: AppTheme.adaptiveColor(context,
+                                                Colors.teal, Colors.tealAccent.shade200),
                                           ),
                                         ),
                                         loading: () => const Text('...'),
@@ -286,7 +291,8 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Card(
-                                color: Colors.green.shade50,
+                                color: AppTheme.tintedBg(
+                                    context, Colors.green.shade50, const Color(0xFF132E1C)),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -295,7 +301,9 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text('পরিশোধিত', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                      Text('পরিশোধিত',
+                                          style: TextStyle(
+                                              fontSize: 12, color: AppTheme.mutedText(context))),
                                       const SizedBox(height: 4),
                                       totalPaidFuture.when(
                                         data: (paid) => Text(
@@ -303,7 +311,8 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.green.shade700,
+                                            color: AppTheme.adaptiveColor(context,
+                                                Colors.green.shade700, Colors.greenAccent.shade200),
                                           ),
                                         ),
                                         loading: () => const Text('...'),
@@ -317,7 +326,8 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Card(
-                                color: Colors.red.shade50,
+                                color: AppTheme.tintedBg(
+                                    context, Colors.red.shade50, const Color(0xFF331818)),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -326,7 +336,9 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text('মোট বাকি', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                                      Text('মোট বাকি',
+                                          style: TextStyle(
+                                              fontSize: 12, color: AppTheme.mutedText(context))),
                                       const SizedBox(height: 4),
                                       totalCostFuture.when(
                                         data: (cost) {
@@ -339,7 +351,11 @@ class _PatientDetailScreenState extends ConsumerState<PatientDetailScreen>
                                                 style: TextStyle(
                                                   fontSize: 18,
                                                   fontWeight: FontWeight.bold,
-                                                  color: due > 0 ? Colors.red : Colors.green,
+                                                  color: due > 0
+                                                      ? AppTheme.adaptiveColor(context,
+                                                          Colors.red, Colors.redAccent.shade100)
+                                                      : AppTheme.adaptiveColor(context,
+                                                          Colors.green, Colors.greenAccent.shade200),
                                                 ),
                                               );
                                             },
