@@ -149,7 +149,9 @@ class AuthRepository extends ChangeNotifier {
           ),
         );
         return Supabase.instance.client;
-      } catch (_) {
+      } catch (e) {
+        debugPrint('Supabase initialize error: $e');
+        _lastError ??= 'সার্ভারে সংযোগ করা যাচ্ছে না। ইন্টারনেট সংযোগ পরীক্ষা করুন।';
         return null;
       }
     }
@@ -223,6 +225,9 @@ class AuthRepository extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('Supabase table login error (falling back to local if cached): $e');
+        if (localUser == null) {
+          _lastError ??= 'সার্ভারে সংযোগ ব্যর্থ হয়েছে। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।';
+        }
       }
     }
 
